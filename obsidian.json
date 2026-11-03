@@ -1,0 +1,28 @@
+{
+  "obsidian": 1,
+  "id": "alomare.remixedstratagems",
+  "version": "1.0.0",
+  "name": {
+    "en": "Remixed Stratagems"
+  },
+  "description": {
+    "en": "New stratagems built from units and effects already in the game. Adds the A/AC-90 Repair Tower, a Tesla Tower that heals Helldivers and repairs vehicles and turrets with REP-80 beams."
+  },
+  "authors": [
+    "Alomare"
+  ],
+  "scope": "session",
+  "entry": "main.lua",
+  "source": "https://github.com/Alomare/RemixedStratagems",
+  "modules": [
+    "src/repair_levels.lua",
+    "src/repair_targets.lua",
+    "src/repair_share.lua",
+    "src/repair_runtime.lua",
+    "src/repair_tower.lua"
+  ],
+  "requires": [
+    "obsidian.api"
+  ],
+  "loader_api": 1
+}
