@@ -64,7 +64,7 @@ test("obsidian_api_takes_the_entry", function()
 		["lib/game"] = { global = function(name) return rawget(_G, name) end },
 		["lib/catalog"] = { xp_and_rewards = function() return 0 end, unlocked = function() return false end },
 	}
-	local saved = { module = obsidian.module, storage = obsidian.storage, caller = obsidian.caller, hook = obsidian.hook }
+	local saved = { module = obsidian.module, storage = obsidian.storage, caller = obsidian.caller, hook = obsidian.hook, ui = obsidian.ui, log = obsidian.log }
 	local saved_ls = rawget(_G, "LoadoutSettings")
 	local ls = loadout()
 	rawset(_G, "LoadoutSettings", ls)
@@ -72,14 +72,17 @@ test("obsidian_api_takes_the_entry", function()
 	obsidian.storage = { get = function() return nil end, set = function() end }
 	obsidian.caller = function() return "obsidian.api" end
 	obsidian.hook = function() end
+	obsidian.log = function() end
+	-- The deploy has the mod's material, as obsidian.json puts it in the boot bundle.
+	obsidian.ui = { art = function(id, opts) return id == tower.ICON and opts.path == tower.ICON_MATERIAL end }
 	local ok, err = pcall(function()
 		local custom = dofile(path)
-		local made, why = custom.define(tower.def())
+		local made, why = custom.define(tower.def("1.22.0"))
 		yes(made, "defined: " .. tostring(why))
 		eq(made.name, levels.NAME)
 		local e = ls.stratagems[made.id]
 		eq(e.unit, "gameobjects/gameobject_hellpod_tesla_01", "lands the Tesla Tower")
-		eq(e.icon, tower.ICON) eq(table.concat(e.combo, " "), table.concat(tower.CODE, " "))
+		eq(e.icon, tower.ICON, "its own icon") eq(table.concat(e.combo, " "), table.concat(tower.CODE, " "))
 		eq(#e.upgrades, 2, "Mk2 and Mk3") eq(e.upgrades[1].cost, 2) eq(e.upgrades[2].cost, 3)
 		eq(e.upgrades[1].upgrade_attributes.attr_range, 2)
 		eq(e.num_uses, 3, "the Tesla Tower's uses") eq(e.cooldown_time, 180, "and cooldown")
@@ -87,12 +90,36 @@ test("obsidian_api_takes_the_entry", function()
 		eq(mk3.name, levels.NAME, "the name the hook looks for, at every level")
 		eq(mk3.unit, "gameobjects/gameobject_hellpod_tesla_01")
 		-- The same def twice is refused rather than added twice.
-		local again, taken = custom.define(tower.def())
+		local again, taken = custom.define(tower.def("1.22.0"))
 		eq(again, nil) eq(taken, "taken")
 	end)
 	for k, v in pairs(saved) do obsidian[k] = v end
 	rawset(_G, "LoadoutSettings", saved_ls)
 	if not ok then error(err, 0) end
+end)
+
+test("the_own_icon_waits_for_an_api_that_adds_its_material", function()
+	eq(tower.own_icon("1.22.0"), true) eq(tower.own_icon("1.22.3"), true) eq(tower.own_icon("2.0.0"), true)
+	eq(tower.own_icon("1.21.9"), false) eq(tower.own_icon("1.9.0"), false) eq(tower.own_icon(nil), false, "no obsidian.info")
+	local old = tower.def("1.21.0")
+	eq(old.icon, tower.OLD_API_ICON) eq(old.icon_material, nil)
+	local new = tower.def("1.22.0")
+	eq(new.icon, tower.ICON) eq(new.icon_material, tower.ICON_MATERIAL)
+end)
+
+-- The names tools/build_icon.py writes and obsidian.json lists.
+test("the_icon_names_match_the_build_and_the_manifest", function()
+	local f = assert(io.open("tools/build_icon.py", "r"))
+	local py = f:read("*a")
+	f:close()
+	eq(py:match('\nICON = "([^"]+)"'), tower.ICON)
+	eq(py:match('\nMATERIAL = "([^"]+)"'), tower.ICON_MATERIAL)
+	local texture = py:match('\nTEXTURE = "([^"]+)"')
+	f = assert(io.open("obsidian.json", "r"))
+	local manifest = f:read("*a")
+	f:close()
+	yes(manifest:find('"name": "' .. tower.ICON_MATERIAL .. '"', 1, true), "the material in the manifest")
+	yes(manifest:find('"name": "' .. texture .. '"', 1, true), "the texture in the manifest")
 end)
 
 return T

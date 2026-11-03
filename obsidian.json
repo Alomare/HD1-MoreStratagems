@@ -1,7 +1,7 @@
 {
   "obsidian": 1,
   "id": "alomare.remixedstratagems",
-  "version": "1.0.1",
+  "version": "1.1.0",
   "name": {
     "en": "Remixed Stratagems"
   },
@@ -23,6 +23,20 @@
   ],
   "requires": [
     "obsidian.api"
+  ],
+  "resources": [
+    {
+      "type": "texture",
+      "name": "remixed_stratagems/repair_tower_icon",
+      "bundle": "9cf71054ea26dddf",
+      "data": "res/repair_tower_icon.texture"
+    },
+    {
+      "type": "material",
+      "name": "remixed_stratagems/icons",
+      "bundle": "9cf71054ea26dddf",
+      "data": "res/icons.material"
+    }
   ],
   "loader_api": 1
 }

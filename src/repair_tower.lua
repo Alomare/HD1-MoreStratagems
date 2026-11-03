@@ -9,8 +9,14 @@ M.TITLE = "A/AC-90 Repair Tower"
 -- The Tesla Tower's code with the last two arrows swapped. No game stratagem's code starts with it, and
 -- it starts with none of theirs.
 M.CODE = { "left", "down", "down", "up", "left", "right" }
--- The REP-80's icon: the HUD has no repair tower of its own, and the tower's work is the REP-80's.
-M.ICON = "stratagem_repairtool"
+-- Its own icon: the Tesla Tower's with the REP-80's heart where the bolts were, in a material this mod
+-- puts in the boot bundle (tools/build_icon.py). Obsidian API 1.22.0 adds that material to every gui
+-- that draws the game's icons; an older one can't, and a gui asked for a name it doesn't have is
+-- assumed fatal, so then the tower shows the REP-80's icon.
+M.ICON = "remixed_repair_tower_icon"
+M.ICON_MATERIAL = "remixed_stratagems/icons"
+M.OLD_API_ICON = "stratagem_repairtool"
+M.ICON_API = { 1, 22, 0 }
 -- Earned like most of the game's stratagems, in the first missions of a new account. "base" would
 -- wait for the Tesla Tower, a reward from difficulty 10 and 11 planets.
 M.UNLOCK = { rank = 5 }
@@ -24,7 +30,20 @@ M.UPGRADES = {
 		description = "Beams heal twice as fast, get downed Helldivers back up and save burning vehicles before they explode." },
 }
 
-function M.def()
+-- Whether an Obsidian API of this version ("1.22.0") takes the tower's own icon.
+function M.own_icon(version)
+	local got = {}
+	for n in tostring(version or ""):gmatch("%d+") do got[#got + 1] = tonumber(n) end
+	for i, want in ipairs(M.ICON_API) do
+		local v = got[i] or 0
+		if v ~= want then return v > want end
+	end
+	return true
+end
+
+-- api_version: the running Obsidian API's, from obsidian.info.
+function M.def(api_version)
+	local own = M.own_icon(api_version)
 	local upgrades = {}
 	for i, u in ipairs(M.UPGRADES) do
 		upgrades[i] = { title = u.title, description = u.description, cost = u.cost, attributes = u.attributes,
@@ -36,7 +55,8 @@ function M.def()
 		title = M.TITLE,
 		description = M.DESCRIPTION,
 		code = M.CODE,
-		icon = M.ICON,
+		icon = own and M.ICON or M.OLD_API_ICON,
+		icon_material = own and M.ICON_MATERIAL or nil,
 		type = "defensive",
 		-- The bars: no damage or fire rate, a range that grows at Mk2, and the Tesla Tower's toughness.
 		attributes = { attr_power = "attr_not_avalible", attr_firerate = "attr_not_avalible", attr_range = 1, attr_durability = 3 },
