@@ -7,7 +7,7 @@ A mod for HELLDIVERS (2015) with new stratagems built from units and effects alr
 A Tesla Tower that sends REP-80 beams in place of lightning. Each beam heals a Helldiver or repairs a vehicle or turret in range. Downed targets go first (from Mk3), then the most hurt, then the nearest, and a beam drops once the target is back to full health.
 
 - Code: ← ↓ ↓ ↑ ← →, the Tesla Tower code with the last two arrows swapped.
-- Icon: the Tesla Tower's, with REP-80 hearts in place of its bolts (with Obsidian API 1.22.0 or later; the REP-80 icon before that).
+- Icon: the Tesla Tower icon with REP-80 hearts in place of the bolts (Obsidian API 1.22.0 or later; before that, the REP-80 icon).
 - Listed right after the Tesla Tower in the Arsenal and the Loadout screen (Obsidian API 1.22.0 or later).
 - Unlocks at rank 5, with the defensive stratagems in the Loadout screen.
 - Cooldown, uses, call-in and time on the ground come from the Tesla Tower: 180 seconds, 3 uses, 7 seconds and 150 seconds.
