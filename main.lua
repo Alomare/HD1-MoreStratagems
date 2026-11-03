@@ -5,14 +5,16 @@ local repair_runtime = obsidian.module("src/repair_runtime")
 local api = obsidian.import("obsidian.api")
 
 -- In the main chunk, before the save's loadout is read: a saved loadout naming a stratagem the game
--- doesn't have yet gets the default in its place.
+-- doesn't have yet gets the default in its place. Obsidian API 1.20.0 and later keep it until the game
+-- has its stratagem list; an older one answers not_ready, and the mod tries again every frame until
+-- it doesn't. true stops the frame calls.
 local function define()
 	local made, why = api.stratagems.define(repair_tower.def())
+	if why == "not_ready" then return false end
 	if not made and why ~= "taken" then obsidian.log("A/AC-90 Repair Tower not added: " .. tostring(why)) end
-	return made, why
+	return true
 end
-local _, why = define()
-if why == "not_ready" then obsidian.after_startup(define) end
+if not define() then obsidian.on_frame(define) end
 
 local tower = repair_runtime.new(api)
 obsidian.hook("TeslaComponent", "setup_master", function(original, ...)
