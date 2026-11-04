@@ -13,7 +13,7 @@
   ],
   "scope": "session",
   "entry": "main.lua",
-  "source": "https://github.com/Alomare/RemixedStratagems",
+  "source": "https://github.com/Alomare/HD1-RemixedStratagems",
   "modules": [
     "src/repair_levels.lua",
     "src/repair_targets.lua",
