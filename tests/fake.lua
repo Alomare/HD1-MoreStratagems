@@ -29,7 +29,7 @@ function Bot:weapons() return {} end
 local function order(name)
 	return function(self, ...) self.orders[name] = { ... } return self end
 end
-for _, name in ipairs({ "fight", "follow", "ride_along", "auto_revive", "auto_get_up", "avoid_shots", "auto_pickup" }) do Bot[name] = order(name) end
+for _, name in ipairs({ "fight", "follow", "ride_along", "auto_revive", "auto_get_up", "avoid_shots", "auto_pickup", "navigate", "movement", "auto_grenades" }) do Bot[name] = order(name) end
 function Bot:board(on_done)
 	self.boarding = on_done or true
 	return true
@@ -121,6 +121,17 @@ function F.machine(net, peer, opts)
 			support_weapons = function()
 				return { { name = "stratagem_machinegun", unit_path = "equipment/wep_mg" }, { name = "stratagem_flamethrower", unit_path = "equipment/wep_flame" },
 					{ name = "stratagem_repairtool", unit_path = "equipment/wep_repairtool_01" } }
+			end,
+		},
+		-- api.gear.add_perk: the perks added on top of a body's main one are listed on the body. Refuses a perk
+		-- the player cannot use, as the real one does ("not_available").
+		gear = {
+			add_perk = function(name, unit)
+				if m.usable[name] == false then return false, "not_available" end
+				if m.add_perk_error then error("add_perk failed") end
+				unit.extra_perks = unit.extra_perks or {}
+				unit.extra_perks[#unit.extra_perks + 1] = name
+				return true
 			end,
 		},
 		stratagems = { give = function(name, owner) m.given = m.given + 1 m.given_to = { name, owner } return true end },

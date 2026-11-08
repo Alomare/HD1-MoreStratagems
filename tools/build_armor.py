@@ -1,5 +1,5 @@
 """Builds the SEAF Unit's armour set from the installed game: the default Helldiver helmet, body and cape,
-recoloured white and blue, as resources of their own.
+recoloured (yellow to blue, black to a very dark blue), as resources of their own.
 
 Usage: python tools/build_armor.py [path to Helldivers/contents]
 
@@ -94,59 +94,45 @@ def smooth(x, a, b):
     return t * t * (3 - 2 * t)
 
 
-def ramp(v, points):
-    xs, ys = zip(*points)
-    return np.interp(v, xs, ys)
+# The scheme: the default Helldiver with the yellow turned blue and the black turned a very dark blue. Every
+# other colour (white, grey, skin, metal, decals) and all shading stay as the game has them.
+YELLOW_OUT_HUE = 218.0        # where the middle of the yellow band lands
+YELLOW_CENTRE = 45.0          # the middle of the game's yellow
+YELLOW_SPREAD = 0.45          # how much of the yellow's own hue spread is kept, so shaded gold stays a little different
+DARK_HUE, DARK_SAT = 222.0, 0.85
+DARK_LIFT = 0.09              # added to the value, so the darkest pixel is blue rather than black
+# Value below which a pixel counts as black (full blend) and above which it is untouched, per look. The cape
+# is cloth all over, between 0.09 and 0.2, with a light emblem above 0.4.
+DARK_RANGE = {"helmet": (0.12, 0.22), "body": (0.12, 0.22), "cape": (0.30, 0.40)}
 
 
-# The scheme: plates in a cool white, trim and cloth in blues.
-TRIM_HUE, TRIM_SAT = 212.0, 0.88          # bright blue, so it reads on white
-CLOTH_HUE, CLOTH_SAT = 218.0, 0.62        # navy cloth
-PLATE_TINT = np.array([0.93, 0.96, 1.0])
-
-# Plate brightness by the game's value, per look: the darkest shades stay dark (visor, gaps), the rest rises
-# to white with the shading kept.
-PLATE_RAMPS = {
-    "helmet": [(0.0, 0.04), (0.06, 0.12), (0.15, 0.58), (0.30, 0.80), (0.70, 0.96), (1.0, 1.0)],
-    "body": [(0.0, 0.10), (0.08, 0.30), (0.14, 0.60), (0.26, 0.84), (0.45, 0.96), (1.0, 1.0)],
-}
+def masks(rgb, look):
+    """(yellow weight, black weight, hue, saturation, value), the weights 0..1 per pixel."""
+    h, s, v = to_hsv(rgb)
+    # Yellow: hue 28..66 (fading out to 20 and 80), saturated. Skin sits below hue 20 and is left alone.
+    hue_ok = smooth(h, 20, 28) * (1 - smooth(h, 66, 80))
+    yellow = hue_ok * smooth(s, 0.2, 0.45) * smooth(v, 0.05, 0.14)
+    lo, hi = DARK_RANGE[look]
+    dark = (1 - smooth(v, lo, hi)) * (1 - yellow)
+    return yellow, dark, h, s, v
 
 
 def recolour_armour(rgb, look):
-    """rgb 0..1. Yellow trim goes blue, grey and black plates go white, dark cloth goes navy, skin stays."""
-    h, s, v = to_hsv(rgb)
-    # Yellow trim: hue 32..66 (fading out to 22 and 78), saturated.
-    hue_ok = smooth(h, 22, 32) * (1 - smooth(h, 66, 78))
-    trim = hue_ok * smooth(s, 0.25, 0.5) * smooth(v, 0.08, 0.2)
-    # Skin of the body atlas: warm, mid saturation, bright. Left alone.
-    warm = np.where(h > 180, 360 - h, h)
-    skin = (1 - smooth(warm, 28, 38)) * smooth(s, 0.12, 0.2) * (1 - smooth(s, 0.55, 0.7)) * smooth(v, 0.27, 0.35)
-    # Cloth: the dark and warm or black part of the body atlas.
-    cloth = (1 - smooth(v, 0.07, 0.13)) if look == "body" else np.zeros_like(v)
-    plate_v = ramp(v, PLATE_RAMPS[look])
-    plate = plate_v[..., None] * PLATE_TINT
-    cloth_rgb = from_hsv(np.full_like(v, CLOTH_HUE), np.full_like(v, CLOTH_SAT), 0.12 + 2.6 * v)
-    trim_rgb = from_hsv(np.full_like(v, TRIM_HUE), np.full_like(v, TRIM_SAT), np.clip(0.18 + 0.82 * v, 0, 1))
-    out = plate * (1 - cloth[..., None]) + cloth_rgb * cloth[..., None]
-    out = out * (1 - trim[..., None]) + trim_rgb * trim[..., None]
-    out = out * (1 - skin[..., None]) + rgb * skin[..., None]
+    """rgb 0..1. Yellow goes blue with saturation and value kept; black and near-black go very dark blue
+    with the value kept (and lifted a little); everything else is returned as it came."""
+    yellow, dark, h, s, v = masks(rgb, look)
+    blue_h = YELLOW_OUT_HUE + (h - YELLOW_CENTRE) * YELLOW_SPREAD
+    blue = from_hsv(blue_h, np.clip(s, 0, 0.95), np.clip(v ** 0.85, 0, 1))
+    navy = from_hsv(np.full_like(v, DARK_HUE), np.full_like(v, DARK_SAT), np.clip(v * 0.9 + DARK_LIFT, 0, 1))
+    out = rgb * (1 - yellow[..., None]) + blue * yellow[..., None]
+    out = out * (1 - dark[..., None]) + navy * dark[..., None]
     return np.clip(out, 0, 1)
-
-
-def recolour_cape(rgb):
-    """The cape is a dark grey cloth with a lighter emblem: blue cloth with a white emblem, folds kept."""
-    h, s, v = to_hsv(rgb)
-    cloth_v = np.clip(0.34 + (v - 0.13) * 3.2, 0.16, 0.9)
-    cloth_rgb = from_hsv(np.full_like(v, CLOTH_HUE - 4), np.full_like(v, 0.78), cloth_v)
-    white = (np.clip(0.55 + v, 0, 1)[..., None]) * PLATE_TINT
-    emblem = smooth(v, 0.24, 0.40)[..., None]
-    return np.clip(cloth_rgb * (1 - emblem) + white * emblem, 0, 1)
 
 
 def recolour(rgba, look):
     """RGBA uint8 to RGBA uint8; alpha is kept."""
     rgb = rgba[..., :3].astype(np.float32) / 255
-    out = recolour_cape(rgb) if look == "cape" else recolour_armour(rgb, look)
+    out = recolour_armour(rgb, look)
     res = rgba.copy()
     res[..., :3] = np.round(out * 255).astype(np.uint8)
     return res
@@ -404,7 +390,7 @@ def check(src, files, manifest):
 
 
 def preview(pairs):
-    cell = 256
+    cell = 384
     names = list(pairs)
     sheet = Image.new("RGB", (cell * 2 + 30, len(names) * (cell + 10) + 10), (36, 36, 40))
     y = 10
@@ -432,7 +418,7 @@ def write(files, manifest):
     option = {
         "id": OPTION, "type": "toggle", "default": True,
         "label": {"en": "SEAF custom armour"},
-        "description": {"en": "SEAF Units wear a white and blue armour set made for them. Changing this needs a full deploy in Obsidian. Off, they wear the Snow armour."},
+        "description": {"en": "SEAF Units wear a blue version of the default Helldiver armour, made for them. Changing this needs a full deploy in Obsidian. Off, they wear the Snow armour."},
     }
     INTERNAL.mkdir(exist_ok=True)
     (INTERNAL / "armor_manifest.json").write_text(

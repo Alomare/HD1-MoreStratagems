@@ -3,7 +3,8 @@
 --
 --   1|<mission seed>|<free pads>|<bot>,<bot>,...|<claim>
 --   bot   = <game object id>.<mk>.<perk>.<weapon>.<health>
---           mk 1 to 3; perk t (Displacement Field), h (Heavy Armor) or - (none); weapon the stratagem id of
+--           mk 1 to 3; perk t (Displacement Field), h (Heavy Armor), l (Laser Aim Module),
+--           s (Stun Grenades), m (Smoke Grenades) or - (none); weapon the stratagem id of
 --           the support weapon in LoadoutSettings, 0 for none; health 0 to 100, the share left
 --   claim = <peer who left>:<count>, empty when there is none
 --
@@ -14,7 +15,7 @@ local M = {}
 M.VERSION = "1"
 M.MAX = 200
 
-local PERK = { t = true, h = true }
+local PERK = { t = true, h = true, l = true, s = true, m = true }
 
 -- The text for a state { seed, free, bots = { { id, mk, perk, weapon, hp } }, claim = { peer, count } },
 -- or nil and "too_long" past the 200 characters the lobby takes.
@@ -43,7 +44,7 @@ function M.decode(text, seed)
 	if version ~= M.VERSION or their_seed ~= tostring(seed or 0) then return nil end
 	local state = { seed = seed, free = tonumber(free), bots = {} }
 	for entry in list:gmatch("[^,]+") do
-		local id, mk, perk, weapon, hp = entry:match("^(%d+)%.([123])%.([th%-])%.(%d+)%.(%d+)$")
+		local id, mk, perk, weapon, hp = entry:match("^(%d+)%.([123])%.([thlsm%-])%.(%d+)%.(%d+)$")
 		if not id then return nil end
 		state.bots[#state.bots + 1] = { id = tonumber(id), mk = tonumber(mk), perk = perk ~= "-" and perk or nil,
 			weapon = tonumber(weapon), hp = math.min(100, tonumber(hp)) }

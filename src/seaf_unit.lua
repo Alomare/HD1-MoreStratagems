@@ -6,7 +6,7 @@ M.NAME = "stratagem_seaf_unit"
 M.TITLE = "SEAF Unit"
 -- In the game's style: the upgrade texts replace this one in the menus, so each restates it with the
 -- change worked in (tools: internal/native-texts.md).
-local KIT = " Improved field kits equip each soldier with a support weapon and either a Displacement Field or Heavy Armor."
+local KIT = " Improved field kits equip each soldier with a support weapon and a random perk."
 local function text(count, soldier, follows, helps, collects, leaves)
 	return "Call down " .. count .. " of the Super Earth Armed Forces to fight beside the squad. The " .. soldier
 		.. " " .. follows .. " the Helldivers, " .. helps .. " up the fallen and " .. collects
@@ -32,9 +32,10 @@ M.UPGRADES = {
 }
 -- The lowest Obsidian API version the stratagem is defined on, and the lowest one soldiers come with
 -- (guest bots on any machine, looks, deaths, pickups and the lobby calls of 1.41.0; the default loadout,
--- fight's best weapon and the weapon's range of 1.42.0).
-M.MIN_API = { 1, 43, 0 }
-M.BOTS_API = { 1, 42, 0 }
+-- fight's best weapon and the weapon's range of 1.42.0; routes, movement, the "threat" weapon choice and
+-- grenades of 1.45.0).
+M.MIN_API = { 1, 45, 0 }
+M.BOTS_API = { 1, 45, 0 }
 
 -- Whether a version string such as "1.22.0" is at least the list given.
 function M.at_least(version, want)

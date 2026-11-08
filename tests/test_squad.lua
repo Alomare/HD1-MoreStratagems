@@ -13,6 +13,8 @@ local function squad_on(m, env)
 	return squad_mod.new(m.api, e)
 end
 
+local POOL = { perk_teleport_shield = true, perk_heavy_armor = true, perk_lasersight = true, perk_grenade_stun = true, perk_grenade_smoke = true }
+
 local function count(t) local n = 0 for _ in pairs(t) do n = n + 1 end return n end
 
 test("a_mk3_call_brings_two_soldiers_with_a_mk2_kit_and_their_orders", function()
@@ -27,9 +29,11 @@ test("a_mk3_call_brings_two_soldiers_with_a_mk2_kit_and_their_orders", function(
 		eq(bot.opts.loadout, "default", "the Liberator and the pistol of the game's default loadout")
 		eq(bot.gear.primary_weapon, nil, "nothing given over them, so nothing dropped")
 		eq(bot.gear.sidearm_weapon, nil)
-		yes(bot.gear.perk == "perk_teleport_shield" or bot.gear.perk == "perk_heavy_armor", "a perk")
+		yes(POOL[bot.gear.perk], "a perk of the Mk2 pool")
 		yes(bot.gear.support_weapon == "equipment/wep_mg" or bot.gear.support_weapon == "equipment/wep_flame", "a support weapon, never the REP-80")
-		eq(bot.orders.fight[1], 25) eq(bot.orders.fight[2].weapon, "best", "the weapon for each target")
+		eq(bot.orders.fight[1], 25) eq(bot.orders.fight[2].weapon, "threat", "the weapon by what the target deserves")
+		eq(bot.orders.navigate[1], true, "finds its way") eq(type(bot.orders.movement[1].seed), "number", "its own spot around the leader")
+		eq(bot.orders.auto_grenades[1], true, "throws grenades by rule")
 		eq(type(bot.orders.follow[1]), "function") eq(bot.orders.follow[2], 6)
 		eq(bot.orders.ride_along[1], true) eq(bot.orders.auto_revive[1], 15)
 		eq(bot.orders.avoid_shots[2].melee, true, "close attacks too")
@@ -244,6 +248,75 @@ test("a_registry_counts_only_the_peers_still_here", function()
 	F.leave(net, "b")
 	eq(s:squad_alive(), 0)
 	eq(count(s.pending), 1, "the soldier of b waits for the heir")
+end)
+
+test("every_perk_of_the_pool_is_given_to_some_mk2_soldier", function()
+	local seen = {}
+	for i = 1, 60 do
+		local net = F.net()
+		local m = F.machine(net, "a")
+		local s = squad_on(m, { rng = function(n) return (i * 7 + n) % n + 1 end })
+		s:call_in({ x = 10, y = 10, z = 1 }, 1, m.avatar)
+		seen[m.bots[1].gear.perk] = true
+	end
+	for name in pairs(POOL) do yes(seen[name], name .. " is rolled") end
+end)
+
+local function snow_machine(opts, level)
+	local net = F.net()
+	local m = F.machine(net, "a", opts)
+	if level == nil then level = { environment_name = "snow" } end
+	m.state.generated_level = level or nil
+	return net, m, squad_on(m)
+end
+
+test("on_snow_every_soldier_gets_the_boots_at_every_mk_on_top_of_the_kit", function()
+	for upgrade = 0, 2 do
+		local _, m, s = snow_machine()
+		eq(s:call_in({ x = 10, y = 10, z = 1 }, upgrade, m.avatar), upgrade == 2 and 2 or 1)
+		for _, bot in ipairs(m.bots) do
+			eq(#bot.body.extra_perks, 1, "one extra perk")
+			eq(bot.body.extra_perks[1], "perk_all_terrain_boots")
+			if upgrade == 0 then eq(bot.gear.perk, nil, "the default perk stays at Mk1, boots on top") end
+			if upgrade > 0 then yes(POOL[bot.gear.perk], "and the Mk2 perk is still given") end
+		end
+	end
+end)
+
+test("off_snow_or_without_the_pack_or_with_no_biome_there_are_no_boots", function()
+	for _, level in ipairs({ { environment_name = "desert" }, { environment_name = "forest" }, { environment_name = "lava" },
+			{ environment_name = "city" }, {}, false }) do
+		local _, m, s = snow_machine(nil, level)
+		s:call_in({ x = 10, y = 10, z = 1 }, 1, m.avatar)
+		eq(m.bots[1].body.extra_perks, nil, "no boots on " .. tostring(level and level.environment_name))
+	end
+	local _, m, s = snow_machine()
+	m.usable.perk_all_terrain_boots = false
+	eq(s:call_in({ x = 10, y = 10, z = 1 }, 1, m.avatar), 1, "a soldier still comes")
+	eq(m.bots[1].body.extra_perks, nil, "a player without the pack gets no boots for the soldiers")
+	local net, m2, s2 = snow_machine()
+	m2.add_perk_error = true
+	eq(s2:call_in({ x = 10, y = 10, z = 1 }, 1, m2.avatar), 1, "an error in the perk call does not stop the call")
+	yes(m2.bots[1].orders.fight, "orders are given after it")
+	local m3 = F.machine(net, "z")
+	m3.api.gear = nil
+	m3.state.generated_level = { environment_name = "snow" }
+	eq(squad_on(m3):call_in({ x = 10, y = 10, z = 1 }, 0, m3.avatar), 1, "an API without gear.add_perk")
+end)
+
+test("a_soldier_the_heir_spawns_on_snow_gets_the_boots_too", function()
+	local net = F.net()
+	local a = F.machine(net, "a")
+	local b = F.machine(net, "b")
+	for _, m in ipairs({ a, b }) do m.state.generated_level = { environment_name = "snow" } end
+	local squads = { a = squad_on(a), b = squad_on(b) }
+	squads.a:call_in({ x = 30, y = 5, z = 0 }, 1, a.avatar)
+	F.run(net, squads, 2)
+	F.leave(net, "a")
+	squads.a = nil
+	F.run(net, squads, 8)
+	eq(#b.bots, 1, "the soldier came back")
+	eq(b.bots[1].body.extra_perks[1], "perk_all_terrain_boots")
 end)
 
 return T

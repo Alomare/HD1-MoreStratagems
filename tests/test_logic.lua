@@ -26,7 +26,7 @@ end)
 
 test("kit_roll_is_a_function_of_the_rng", function()
 	local perks = kit.perks()
-	eq(#perks, 2)
+	eq(#perks, 5)
 	local a = kit.roll(2, seq(2, 1), perks, WEAPONS)
 	local b = kit.roll(2, seq(2, 1), perks, WEAPONS)
 	eq(a.perk, "perk_heavy_armor") eq(a.weapon.name, "stratagem_machinegun")
@@ -36,10 +36,12 @@ test("kit_roll_is_a_function_of_the_rng", function()
 	eq(kit.roll(3, seq(1, 2), perks, WEAPONS).weapon.name, "stratagem_flamethrower", "Mk3 rolls a Mk2 kit")
 end)
 
-test("a_perk_the_player_cant_use_falls_back_to_the_other", function()
+test("a_perk_the_player_cant_use_falls_back_to_the_others", function()
 	local perks = kit.perks(function(name) return name ~= "perk_teleport_shield" end)
-	eq(#perks, 1) eq(perks[1], "perk_heavy_armor")
+	eq(#perks, 4) eq(perks[1], "perk_heavy_armor")
 	eq(kit.roll(2, seq(1), perks, WEAPONS).perk, "perk_heavy_armor")
+	local only = kit.perks(function(name) return name == "perk_heavy_armor" end)
+	eq(#only, 1) eq(kit.roll(2, seq(1), only, WEAPONS).perk, "perk_heavy_armor")
 	eq(#kit.perks(function() return false end), 0)
 	eq(kit.roll(2, seq(1), {}, WEAPONS).perk, nil, "none usable, none carried")
 end)
@@ -54,6 +56,50 @@ test("bots_get_no_repair_tool_and_an_inherited_kit_keeps_what_it_can", function(
 	eq(swapped.weapon.name, "stratagem_flamethrower", "and so is a weapon this player doesn't own")
 	eq(kit.inherit(2, nil, nil, seq(1), kit.perks(), WEAPONS).weapon, nil, "no weapon stays none")
 	eq(kit.inherit(1, "perk_heavy_armor", "stratagem_machinegun", seq(1), kit.perks(), WEAPONS).perk, nil, "Mk1 keeps nothing")
+end)
+
+test("the_mk2_pool_holds_the_five_perks_by_their_game_names_and_each_has_a_registry_code", function()
+	local want = { "perk_teleport_shield", "perk_heavy_armor", "perk_lasersight", "perk_grenade_stun", "perk_grenade_smoke" }
+	eq(#kit.PERKS, #want)
+	for i, name in ipairs(want) do
+		eq(kit.PERKS[i], name)
+		eq(kit.CODE_PERK[kit.PERK_CODE[name]], name, "a code and back")
+		eq(kit.perks()[i], name)
+	end
+	for i = 1, 5 do eq(kit.roll(2, seq(i, 1), kit.perks(), WEAPONS).perk, want[i], "each one can be rolled") end
+	eq(kit.roll(1, seq(3), kit.perks(), WEAPONS).perk, nil, "Mk1 rolls none")
+	yes(kit.GRENADE_PERKS.perk_grenade_stun and kit.GRENADE_PERKS.perk_grenade_smoke and not kit.GRENADE_PERKS.perk_lasersight)
+	for _, name in ipairs(want) do
+		local text = registry.encode({ seed = 5, free = 1, bots = { { id = 7, mk = 2, perk = kit.PERK_CODE[name], weapon = 0, hp = 100 } } })
+		eq(registry.decode(text, 5).bots[1].perk, kit.PERK_CODE[name], name .. " survives the shared text")
+		eq(kit.inherit(2, name, nil, seq(1), kit.perks(), WEAPONS).perk, name, name .. " is inherited")
+	end
+end)
+
+test("snow_is_read_from_the_generated_level_and_never_throws", function()
+	yes(kit.snow({ generated_level = { environment_name = "snow" } }))
+	for _, level in ipairs({ "desert", "forest", "lava", "city", "provinggrounds" }) do
+		yes(not kit.snow({ generated_level = { environment_name = level } }), level)
+	end
+	yes(not kit.snow(nil)) yes(not kit.snow({})) yes(not kit.snow("snow")) yes(not kit.snow({ generated_level = "snow" }))
+	local bad = setmetatable({}, { __index = function() error("no level yet") end })
+	yes(not kit.snow(bad), "an unreadable state counts as no snow")
+end)
+
+test("the_boots_are_an_extra_perk_on_snow_only_and_only_when_usable", function()
+	eq(#kit.extras(false), 0) eq(#kit.extras(nil), 0)
+	local on = kit.extras(true)
+	eq(#on, 1) eq(on[1], "perk_all_terrain_boots")
+	eq(#kit.extras(true, function() return true end), 1)
+	eq(#kit.extras(true, function(name) return name ~= "perk_all_terrain_boots" end), 0, "a paid perk the player lacks")
+	yes(not kit.PERK_CODE.perk_all_terrain_boots, "the boots are not a kit perk")
+	local given = {}
+	local api = { game = { state = function() return { generated_level = { environment_name = "snow" } } end },
+		catalog = { usable = function() return true end },
+		gear = { add_perk = function(name, unit) given[#given + 1] = { name, unit } return true end } }
+	eq(#kit.equip(api, "body"), 1) eq(given[1][1], "perk_all_terrain_boots") eq(given[1][2], "body")
+	eq(#kit.equip(api, nil), 0, "no body, no call")
+	eq(#kit.equip(nil, "body"), 0)
 end)
 
 test("registry_round_trip", function()

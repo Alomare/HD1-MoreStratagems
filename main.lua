@@ -6,7 +6,7 @@ local homing = obsidian.module("src/homing_payload")
 local api = obsidian.import("obsidian.api")
 local api_info = obsidian.info and obsidian.info("obsidian.api")
 
--- The white and blue armour. The mod runs on without it: soldiers then wear the vanilla mix.
+-- The blue armour. The mod runs on without it: soldiers then wear the vanilla mix.
 local look_ok, seaf_look = pcall(obsidian.module, "src/seaf_look")
 if look_ok and type(seaf_look) == "table" and seaf_look.start then
 	local started, why = pcall(seaf_look.start)

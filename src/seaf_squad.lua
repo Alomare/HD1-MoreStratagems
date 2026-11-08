@@ -176,7 +176,7 @@ end
 -- refused (no free pad, for one).
 function S:spawn(k, pos, hp)
 	self.counter = self.counter + 1
-	local rec = { kit = k, hp = hp or 1, name = "SEAF " .. self.counter }
+	local rec = { kit = k, hp = hp or 1, name = "SEAF " .. self.counter, seed = self.counter }
 	local opts = { bare = true, guest = true, require_pad = true, loadout = "default", name = rec.name, position = pos, look = self:look(),
 		on_death = function() self:died(rec) end }
 	local b, why = self.api.bots.add(opts)
@@ -197,18 +197,24 @@ end
 -- Gear and orders, once the body is there: the spawn is queued, so this waits for it. The body comes with
 -- the game's default loadout (add's loadout = "default"): the Liberator, the pistol and the default perk,
 -- which is the Mk1 kit. Mk2 adds a perk and a support weapon. The game takes out each weapon it is given
--- (InventoryComponent "set_weapon"), so fight's "best" brings the right one back out: the Liberator, the
--- support weapon where it hurts a target clearly more, the pistol once the Liberator has no ammunition.
+-- (InventoryComponent "set_weapon"), so fight's "threat" brings the right one back out: the Liberator for most
+-- targets, the support weapon for what deserves it, the pistol once the Liberator has no ammunition. Orders run on
+-- this machine, the one that owns the soldier, as the input they drive is read here only. Routes (navigate),
+-- soldierly movement and grenades (auto_grenades) come with the API's 1.45.0.
 function S:prepare(rec)
 	if rec.ready or rec.dead then return end
 	local b = rec.bot
 	if not b:unit() then return end
 	rec.ready = true
 	if rec.kit.perk then b:give_perk(rec.kit.perk) end
+	kit.equip(self.api, b:unit())
 	if rec.kit.weapon then b:give_weapon("support_weapon", rec.kit.weapon.unit_path) end
 	if rec.hp and rec.hp < 1 and rec.hp > 0 then b:set_health(rec.hp) end
-	b:fight(M.FIGHT, { weapon = "best" })
+	b:fight(M.FIGHT, { weapon = "threat" })
 	b:follow(function(bot) return self:follow_target(bot) end, M.FOLLOW)
+	b:navigate(true)
+	b:movement({ seed = rec.seed })
+	b:auto_grenades(true)
 	b:ride_along(true)
 	b:auto_revive(M.REVIVE)
 	b:auto_get_up(true)

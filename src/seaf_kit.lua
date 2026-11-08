@@ -1,17 +1,32 @@
 -- What a SEAF soldier carries, by Mk. Pure: no game calls, so the tests run it as it is.
 --   Mk1: the game's default loadout: the Liberator, the default pistol and the default perk.
---   Mk2: the same, one perk at random (Displacement Field or Heavy Armor) and one support weapon at random.
+--   Mk2: the same, one perk at random (Displacement Field, Heavy Armor, Laser Aim Module, Stun Grenades or
+--        Smoke Grenades) and one support weapon at random.
 --   Mk3: two soldiers per call, each with a Mk2 kit rolled separately.
+-- On a snow mission every soldier also wears the All Terrain Boots perk, at every Mk (M.equip).
 local M = {}
 
 -- What the game's default loadout gives (LoadoutSettings.default_loadout), which every soldier lands with.
 M.PRIMARY = "equipment/wep_assaultrifle_01"
 M.SIDEARM = "equipment/wep_pistol_01"
--- perk_teleport_shield is the perk the game calls Displacement Field: the perk's setup enables the teleport
--- shield (perk_settings.lua).
-M.PERKS = { "perk_teleport_shield", "perk_heavy_armor" }
-M.PERK_CODE = { perk_teleport_shield = "t", perk_heavy_armor = "h" }
-M.CODE_PERK = { t = "perk_teleport_shield", h = "perk_heavy_armor" }
+-- The perks a Mk2 soldier picks from, by the game's names (LoadoutSettings.perks):
+--   perk_teleport_shield   Displacement Field: the perk's setup enables the teleport shield (perk_settings.lua).
+--   perk_heavy_armor       Heavy Armor: armour and the armour piece.
+--   perk_lasersight        Laser Aim Module: the game's default perk, so every soldier already lands with it.
+--                          The perk has no master setup: only a beam drawn from the weapon, with no effect on
+--                          the soldier's aim. The API refuses to hand it out in a lobby with other players
+--                          ("alone_only"), which leaves the default one in place.
+--   perk_grenade_stun      Stun Grenades, and
+--   perk_grenade_smoke     Smoke Grenades: the perks only change the type of the two grenades every Helldiver
+--                          lands with (InventoryComponent "set_grenade_path"). A soldier throws one only when
+--                          something calls bot:throw_at.
+M.PERKS = { "perk_teleport_shield", "perk_heavy_armor", "perk_lasersight", "perk_grenade_stun", "perk_grenade_smoke" }
+M.PERK_CODE = { perk_teleport_shield = "t", perk_heavy_armor = "h", perk_lasersight = "l", perk_grenade_stun = "s", perk_grenade_smoke = "m" }
+M.CODE_PERK = { t = "perk_teleport_shield", h = "perk_heavy_armor", l = "perk_lasersight", s = "perk_grenade_stun", m = "perk_grenade_smoke" }
+-- The perks that give a soldier grenades of another type.
+M.GRENADE_PERKS = { perk_grenade_stun = true, perk_grenade_smoke = true }
+-- The perk every soldier gets on snow, on top of the one above (a paid perk: a player without the pack gets none).
+M.BOOTS = "perk_all_terrain_boots"
 -- Support weapons a bot gets no use from: the REP-80 heals and does nothing to enemies.
 M.NOT_FOR_BOTS = { stratagem_repairtool = true }
 
@@ -29,7 +44,7 @@ function M.count(mk)
 end
 
 -- The perks of M.PERKS the player can use, in that order. usable(name) answers true for one they can.
--- Each one stands in for the other when only one is usable.
+-- The others stand in for one that is not usable.
 function M.perks(usable)
 	local out = {}
 	for _, name in ipairs(M.PERKS) do
@@ -48,6 +63,40 @@ function M.weapons(list)
 		end
 	end
 	return out
+end
+
+-- Whether a mission is on a snow planet, from the game's state (api.game.state()): the generated level names
+-- the planet type. Anything unreadable counts as no.
+function M.snow(state)
+	local ok, snow = pcall(function()
+		local level = type(state) == "table" and state.generated_level
+		return type(level) == "table" and level.environment_name == "snow"
+	end)
+	return ok and snow == true
+end
+
+-- The perks a soldier gets on top of the kit: the boots on snow, when the player can use them.
+-- usable(name) answers true for a perk the player can use, nil for any.
+function M.extras(snow, usable)
+	local out = {}
+	if snow and (usable == nil or usable(M.BOOTS)) then out[#out + 1] = M.BOOTS end
+	return out
+end
+
+-- Gives a soldier's body the extra perks (api.gear.add_perk, which runs the perk's setup on the body). Reads the
+-- biome and the player's ownership defensively: whatever fails leaves the soldier without them. Answers the
+-- perk names added.
+function M.equip(api, unit)
+	local added = {}
+	pcall(function()
+		if not (type(api) == "table" and unit and api.gear and api.gear.add_perk) then return end
+		local snow = api.game and api.game.state and M.snow(api.game.state())
+		local usable = api.catalog and api.catalog.usable
+		for _, name in ipairs(M.extras(snow, usable)) do
+			if api.gear.add_perk(name, unit) == true then added[#added + 1] = name end
+		end
+	end)
+	return added
 end
 
 -- One soldier's kit: { mk, perk, weapon }. perk is a perk name or nil, weapon an entry of `weapons` or nil.

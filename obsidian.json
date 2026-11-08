@@ -262,7 +262,7 @@
         "en": "SEAF custom armour"
       },
       "description": {
-        "en": "SEAF Units wear a white and blue armour set made for them. Changing this needs a full deploy in Obsidian. Off, they wear the Snow armour."
+        "en": "SEAF Units wear a blue version of the default Helldiver armour, made for them. Changing this needs a full deploy in Obsidian. Off, they wear the Snow armour."
       }
     }
   ]

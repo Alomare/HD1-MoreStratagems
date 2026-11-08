@@ -1,4 +1,4 @@
--- The SEAF Unit's look: a white and blue set of armour (helmet, body, cape) that the game's customization
+-- The SEAF Unit's look: a blue set of armour (helmet, body, cape) that the game's customization
 -- component can spawn like any other. The pieces are copies of the default Helldiver outfit under new unit
 -- names (res/armor, built by tools/build_armor.py), so other players' armour is untouched.
 --
@@ -175,7 +175,7 @@ function M.shared(members)
 	return true
 end
 
--- The indexes for a lobby: the white and blue set when it is installed and every player has it, the
+-- The indexes for a lobby: the blue set when it is installed and every player has it, the
 -- fallback otherwise.
 function M.pick(members)
 	local own = M.indexes()
