@@ -1,25 +1,25 @@
 -- The A/MG-15 Perforator Turret: the entry, the code, the texts, the settings variants built from the
--- Minigun Turret and the Justice, the hellpod marker, and the runtime against a small stand-in for
+-- Railcannon Turret and the Justice, the hellpod marker, and the runtime against a small stand-in for
 -- LuaSettingsManager and the turret component.
 local pt = obsidian.module("src/perforator_turret")
 
 local T = {}
 local function test(name, fn) T[#T + 1] = { name, fn } end
 
--- The game's numbers, as lifted (gameobjects/gameobject_hellpod_minigun_turret.lua,
+-- The game's numbers, as lifted (gameobjects/gameobject_hellpod_railcannon_turret.lua,
 -- equipment/wep_assaultrifle_02.lua).
-local function minigun()
+local function railcannon()
 	return {
 		unit_radius = 1,
-		turret_info = { angle_to_target_diff_before_shooting = 0.07, check_for_enemies_interval = 1, check_for_enemies_radius = 16, fire_cooldown = 0.5,
-			infinite_ammo = true, rounds = 600, start_idle_time = 5.5, start_invul_time = 4, switch_target_angle = 40, switch_target_interval = 1,
-			targeting_mode = "angle", turn_speed_idle = 0, turn_speed_target = 0.19 },
-		weapon_info = { automatic = true, effect_hit = "projectile", firerate = 1300, power = 75, power_crit = 110, range = 25, spread = 6,
-			attributes = { armorpiercing = false, fixed_spread = true } },
+		turret_info = { angle_to_target_diff_before_shooting = 0.001, check_for_enemies_interval = 1, check_for_enemies_radius = 16, fire_cooldown = 0,
+			infinite_ammo = true, rounds = 50, start_idle_time = 5.5, start_invul_time = 4, switch_target_angle = 40, switch_target_interval = 1,
+			targeting_mode = "size", turn_speed_idle = 0, turn_speed_target = 0.23 },
+		weapon_info = { automatic = false, effect_hit = "projectile_heavy", firerate = 15, power = 1500, range = 50, spread = 0,
+			attributes = { armorpiercing = true, unstoppable = true } },
 		health_info = { armor_max = 150, armor_min = 0, authoritative = true, constitution = 0, constitution_decay = 0, healable = true, health = 400, health_decay = 0 },
 		ttl_info = { time_until_dead = 120, time_until_despawn = 4 },
 		show_on_map_info = {},
-		upgrade_info = { { weapon_info = { spread = 3 } }, { turret_info = { turn_speed_target = 0.3 } } },
+		upgrade_info = { { weapon_info = { firerate = 30 } }, { turret_info = { turn_speed_target = 0.3 } } },
 	}
 end
 
@@ -46,11 +46,11 @@ local function protect(t)
 	return setmetatable({ __protected_table = t }, { __index = t, __newindex = function() error("constant") end })
 end
 
--- A stand-in game: LuaSettingsManager with the Minigun Turret's levels 1 and 2, LoadoutSettings reading
+-- A stand-in game: LuaSettingsManager with the Railcannon Turret's levels 1 and 2, LoadoutSettings reading
 -- each unit's upgrade value, and turret units.
 local function game()
-	local rail, rifle = minigun(), justice()
-	local by_path = { [pt.UNIT] = protect(rail), [pt.RIFLE] = protect(rifle), ["gameobjects/gameobject_hellpod_railcannon_turret"] = protect({ weapon_info = { firerate = 15 } }) }
+	local rail, rifle = railcannon(), justice()
+	local by_path = { [pt.UNIT] = protect(rail), [pt.RIFLE] = protect(rifle), ["gameobjects/gameobject_hellpod_minigun_turret"] = protect({ weapon_info = { firerate = 1300 } }) }
 	local g = { rail = rail, rifle = rifle, logs = {}, reloads = 0 }
 	g.vanilla = { [1] = protect(level(rail, 1)), [2] = protect(level(rail, 2)) }
 	local lsm = { unit_path_to_modified_settings = { [pt.UNIT] = { [1] = g.vanilla[1], [2] = g.vanilla[2] } } }
@@ -67,6 +67,7 @@ local function game()
 	g.lsm = lsm
 	local ls = { get_upgraded_settings = function(unit, v) return lsm:get_modified_settings(unit, v or unit.upgrade) end }
 	local globals = { LuaSettingsManager = lsm, LoadoutSettings = ls }
+	g.globals = globals
 	g.env = {
 		global = function(name) return globals[name] end,
 		log = function(text) g.logs[#g.logs + 1] = text end,
@@ -91,24 +92,24 @@ local function near(got, want, what)
 	if math.abs(got - want) > 1e-9 then error((what or "value") .. ": expected " .. tostring(want) .. ", got " .. tostring(got), 2) end
 end
 
-test("the_entry_has_the_turret_numbers_and_new_words", function()
+test("the_entry_has_the_railcannon_turret_numbers_and_new_words", function()
 	local def = pt.def()
 	eq(def.name, "stratagem_turret_perforator")
-	eq(def.base, "stratagem_turret")
+	eq(def.base, "stratagem_turret_railcannon")
 	eq(def.title, "A/MG-15 Perforator Turret")
 	eq(def.type, "defensive")
 	eq(def.icon, "perforator_turret_icon")
 	eq(def.icon_material, "more_stratagems/icons")
 	eq(table.concat(def.code, " "), "left down up up right")
 	eq(def.stats, nil, "uses, cooldown and call-in are the base's")
-	eq(def.unlock.rank, 10, "later than the starting Minigun Turret")
+	eq(def.unlock, nil, "unlocked with the Railcannon Turret")
 	eq(def.on_activate, nil, "the turret lands")
 	eq(#def.upgrades, 2)
 	eq(def.upgrades[1].cost, 2) eq(def.upgrades[2].cost, 2)
 	eq(def.upgrades[1].title, "A/MG-15 Perforator Turret Mk2")
 	eq(def.upgrades[2].title, "A/MG-15 Perforator Turret Mk3")
 	eq(def.upgrades[1].stats, nil, "Mk2 keeps the cooldown")
-	eq(def.upgrades[2].stats.cooldown_time, 120, "Mk3 cooldown")
+	eq(def.upgrades[2].stats.cooldown_time, 120, "Mk3 cooldown, as the Railcannon Turret Mk3")
 	eq(def.upgrades[1].upgrade_attributes.attr_firerate, 4)
 	eq(def.upgrades[2].upgrade_attributes.attr_turnspeed, 4)
 end)
@@ -167,7 +168,7 @@ test("the_texts_restate_the_base_and_keep_the_writing_rules", function()
 	yes(mk3:find("higher rate of fire", 1, true) and mk3:find("faster rotation", 1, true), "Mk3 restates Mk2 and adds the turn speed")
 end)
 
-test("the_variants_fire_justice_rounds_from_the_minigun_turret", function()
+test("the_variants_fire_justice_rounds_with_the_railcannon_levels", function()
 	local g = game()
 	local before = pt.copy(g.rail)
 	local j = pt.justice_from(g.rifle.weapon_info)
@@ -177,13 +178,13 @@ test("the_variants_fire_justice_rounds_from_the_minigun_turret", function()
 	eq(mk[1].weapon_info.firerate, 920, "Mk2 doubles")
 	eq(mk[2].weapon_info.firerate, 920, "Mk3 keeps Mk2")
 	near(mk[0].turret_info.turn_speed_target, 0.23) near(mk[1].turret_info.turn_speed_target, 0.23)
-	near(mk[2].turret_info.turn_speed_target, 0.3, "Mk3 turns faster")
+	near(mk[2].turret_info.turn_speed_target, 0.3, "Mk3 turns as the Railcannon Turret Mk3")
 	for l = 0, 2 do
 		local w, t = mk[l].weapon_info, mk[l].turret_info
 		eq(w.automatic, true) eq(w.power, 120) eq(w.power_crit, 150) eq(w.range, 30) eq(w.effect_hit, "projectile_heavy")
 		yes(w.spread < 2.5 and w.spread > 0, "a tighter spread than the Justice")
 		eq(w.attributes.armorpiercing, false) eq(w.attributes.unstoppable, false)
-		eq(t.rounds, 3000) near(t.fire_cooldown, 0.5, "as the Minigun Turret") near(t.angle_to_target_diff_before_shooting, 0.07, "as the Minigun Turret") eq(t.targeting_mode, "angle")
+		eq(t.rounds, 3000) near(t.fire_cooldown, 0.5) near(t.angle_to_target_diff_before_shooting, 0.07) eq(t.targeting_mode, "angle")
 		eq(t.infinite_ammo, true) eq(t.check_for_enemies_radius, 16) eq(t.start_invul_time, 4)
 		eq(mk[l].health_info.health, 400, "the turret's health") eq(mk[l].ttl_info.time_until_dead, 120)
 		yes(mk[l].weapon_info ~= g.rail.weapon_info and mk[l].health_info ~= g.rail.health_info, "own tables")
@@ -191,7 +192,7 @@ test("the_variants_fire_justice_rounds_from_the_minigun_turret", function()
 	end
 	-- 2000 rounds a minute is the most the stream could use in a turret's 120 seconds.
 	yes(mk[1].turret_info.rounds > mk[1].weapon_info.firerate * 2, "no ammunition reset in a turret's life")
-	yes(pt.same(g.rail, before), "the Minigun Turret's settings stay as they were")
+	yes(pt.same(g.rail, before), "the Railcannon Turret's settings stay as they were")
 end)
 
 test("the_justice_numbers_fall_back_one_by_one", function()
@@ -209,8 +210,8 @@ test("the_marker_moves_only_the_perforator_past_the_game_levels", function()
 	end
 	local s = { stratagem_info = { name = pt.NAME } }
 	eq(pt.mark(s), true) eq(s.upgrade_value, 4, "no value is Mk1")
-	local rail = { stratagem_info = { name = "stratagem_turret" }, upgrade_value = 2 }
-	eq(pt.mark(rail), false) eq(rail.upgrade_value, 2, "the Minigun Turret keeps the value")
+	local rail = { stratagem_info = { name = "stratagem_turret_railcannon" }, upgrade_value = 2 }
+	eq(pt.mark(rail), false) eq(rail.upgrade_value, 2, "the Railcannon Turret keeps the value")
 	eq(pt.mark(nil), false) eq(pt.mark({}), false)
 	eq(pt.mark({ stratagem_info = { name = pt.NAME }, upgrade_value = 1.5 }), false)
 end)
@@ -220,8 +221,8 @@ test("the_variants_go_in_beside_the_game_levels_and_come_out_again", function()
 	local r = pt.runtime(g.env)
 	eq(r:install(), true)
 	local map = g.lsm.unit_path_to_modified_settings[pt.UNIT]
-	eq(map[1], g.vanilla[1], "Mk2 Minigun untouched") eq(map[2], g.vanilla[2])
-	eq(g.vanilla[1].weapon_info.spread, 3) eq(g.vanilla[1].weapon_info.power, 75)
+	eq(map[1], g.vanilla[1], "Mk2 Railcannon untouched") eq(map[2], g.vanilla[2])
+	eq(g.vanilla[1].weapon_info.firerate, 30) eq(g.vanilla[1].weapon_info.power, 1500)
 	local held = {}
 	for l = 0, 2 do
 		held[l] = pt.raw(map[4 + l])
@@ -234,7 +235,7 @@ test("the_variants_go_in_beside_the_game_levels_and_come_out_again", function()
 	-- place on the next check, keeping the tables live turrets hold.
 	local weapon = held[1].weapon_info
 	pt.assign(held[1], level(g.rail, 2))
-	eq(weapon.firerate, 1300, "the game turret again")
+	eq(weapon.automatic, false)
 	r:frame(1)
 	eq(held[1].weapon_info, weapon, "the same table") eq(weapon.automatic, true) eq(weapon.firerate, 920)
 	-- A script reload empties the map: back with the same tables.
@@ -259,18 +260,18 @@ test("the_hellpod_of_a_perforator_hands_the_turret_its_level", function()
 	local turret = g.turret(s.upgrade_value)
 	local got = g.env.global("LoadoutSettings").get_upgraded_settings(turret)
 	eq(got.weapon_info.firerate, 920) near(got.turret_info.turn_speed_target, 0.3)
-	local rail = { stratagem_info = { name = "stratagem_turret" }, upgrade_value = 1 }
+	local rail = { stratagem_info = { name = "stratagem_turret_railcannon" }, upgrade_value = 1 }
 	r:hellpod(rail)
 	eq(rail.upgrade_value, 1)
-	eq(g.env.global("LoadoutSettings").get_upgraded_settings(g.turret(1)).weapon_info.power, 75, "a Minigun Turret stays one")
-	-- No settings yet: lands as a Minigun Turret, and says so.
+	eq(g.env.global("LoadoutSettings").get_upgraded_settings(g.turret(1)).weapon_info.power, 1500, "a Railcannon Turret stays one")
+	-- No settings yet: lands as a Railcannon Turret, and says so.
 	local bare = game()
 	bare.lsm.get_settings_by_unit_path = function() return nil end
 	local r2 = pt.runtime(bare.env)
 	local s2 = { stratagem_info = { name = pt.NAME }, upgrade_value = 0 }
 	r2:hellpod(s2)
 	eq(s2.upgrade_value, 0)
-	yes(bare.logs[1] and bare.logs[1]:find("Minigun", 1, true), "logged")
+	yes(bare.logs[1] and bare.logs[1]:find("Railcannon", 1, true), "logged")
 end)
 
 test("a_slave_that_sees_the_upgrade_value_late_remakes_the_raycast", function()
@@ -278,7 +279,7 @@ test("a_slave_that_sees_the_upgrade_value_late_remakes_the_raycast", function()
 	local r = pt.runtime(g.env)
 	r:install()
 	local turret = g.turret(0)
-	-- setup_slave read the value before it arrived: the Minigun's base settings.
+	-- setup_slave read the value before it arrived: the Railcannon's base settings.
 	local ctx = { state = {} }
 	g.component.reload_slave(g.component, turret, ctx)
 	r:reloaded(turret, ctx)
@@ -287,7 +288,7 @@ test("a_slave_that_sees_the_upgrade_value_late_remakes_the_raycast", function()
 	ctx.state.start_rotation, ctx.state.rotation = 0.25, { "landed" }
 	r:watch(g.component, turret, ctx, true)
 	r:frame(0.1)
-	eq(ctx.state.weapon_info.power, 75, "still the base while the value is 0")
+	eq(ctx.state.weapon_info.power, 1500, "still the base while the value is 0")
 	turret.upgrade = 5
 	r:frame(0.1)
 	eq(ctx.state.weapon_info.firerate, 920) eq(ctx.state.raycast_slave.weapon_info.firerate, 920, "the raycast too")
@@ -309,7 +310,117 @@ test("a_slave_that_sees_the_upgrade_value_late_remakes_the_raycast", function()
 	eq(g.reloads, reloads, "nothing to do")
 end)
 
-test("minigun_and_other_turrets_are_never_touched", function()
+-- The engine calls a mounted rifle needs.
+local function armoury(g)
+	g.flows, g.links, g.shooters = {}, {}, {}
+	local U = {
+		alive = function(u) return u.alive ~= false end,
+		node = function(_, name) g.node = name return 7 end,
+		world_position = function() return "pos" end,
+		world_rotation = function() return "rot" end,
+		set_unit_visibility = function(u, v) u.visible = v end,
+		set_local_position = function(u, _, p) u.offset = p end,
+		set_local_rotation = function() end,
+		flow_event = function(u, e) g.flows[#g.flows + 1] = { u, e } end,
+		set_flow_variable = function(u, n, v) u[n] = v end,
+	}
+	g.globals.Unit = U
+	g.globals.Vector3 = function(x, y, z) return { x = x, y = y, z = z } end
+	g.globals.Quaternion = { identity = function() return "identity" end }
+	g.globals.World = {
+		spawn_unit = function(_, path) g.spawned = (g.spawned or 0) + 1 return { path = path } end,
+		link_unit = function(_, child, _, parent, node) g.links[#g.links + 1] = { child, parent, node } end,
+		unlink_unit = function(_, u) u.unlinked = true end,
+		destroy_unit = function(_, u) u.alive = false end,
+		physics_world = function() return "physics" end,
+	}
+	g.globals.PhysicsWorld = { make_raycast = function(_, cb, mode, _, filter) return { cb = cb, mode = mode, filter = filter } end }
+	g.globals.WeaponUtility = { shoot_ray_callback = function(unit, ctx, component, _, _, weapon, _, owner)
+		g.shooters[#g.shooters + 1] = { unit = unit, weapon = weapon, owner = owner, component = component }
+		return function(hits)
+			U.set_flow_variable(unit, "hit", true)
+			U.flow_event(hits.victim, "hit_taken_projectile")
+			U.flow_event(unit, "on_raycast")
+		end
+	end }
+	g.component.world_proxy = { get_world = function() return "world" end }
+	return U
+end
+
+test("a_perforator_carries_a_justice_and_the_shot_plays_on_the_rifle", function()
+	local g = game()
+	local U = armoury(g)
+	local r = pt.runtime(g.env)
+	eq(r:install(), true)
+	local t = g.turret(4)
+	local ctx = { state = { owner_unit = "thrower" } }
+	r:reloaded(t, ctx, g.component)
+	local rifle = r.rifles[t].unit
+	eq(rifle.path, pt.RIFLE, "the real Justice")
+	eq(rifle.visible, true, "on show")
+	eq(g.node, pt.MOUNT_NODE) eq(g.links[1][1], rifle) eq(g.links[1][2], t, "on the turret")
+	eq(rifle.offset.z, pt.MOUNT.z)
+	eq(ctx.state.raycast_slave.filter, "damage_ray") eq(ctx.state.raycast_slave.mode, "all")
+	eq(g.shooters[1].unit, t, "the turret stays the shooter, for the hits other machines hear of")
+	eq(g.shooters[1].owner, "thrower")
+	eq(g.shooters[1].weapon.power, 120, "Justice rounds")
+	-- A second reload makes the raycast again and keeps the one rifle.
+	r:reloaded(t, ctx, g.component)
+	eq(g.spawned, 1) eq(#g.shooters, 2)
+	-- The ray lands: the hit and the tracer go to the rifle, the victim keeps the hit.
+	local victim = { name = "victim" }
+	local flow = U.flow_event
+	ctx.state.raycast_slave.cb({ victim = victim })
+	eq(rifle.hit, true) eq(t.hit, nil, "not on the turret")
+	eq(g.flows[1][1], victim) eq(g.flows[2][1], rifle) eq(g.flows[2][2], "on_raycast")
+	eq(U.flow_event, flow, "the engine calls are put back")
+	-- The update: shots go to the rifle, anything else stays.
+	g.flows = {}
+	r:through_rifles(function()
+		U.flow_event(t, "fire_start") U.flow_event(t, "fire_round") U.flow_event(t, "fire_end") U.flow_event(t, "close")
+	end)
+	eq(g.flows[1][1], rifle) eq(g.flows[3][2], "fire_end") eq(g.flows[4][1], t) eq(g.flows[4][2], "close")
+	-- An error in the game's call still puts them back, and is not swallowed.
+	local ok = pcall(r.through_rifles, r, function() error("game") end)
+	eq(ok, false) eq(U.flow_event, flow) eq(r.redirecting, false)
+	-- The turret goes: the rifle goes too.
+	r:dismount(t)
+	eq(rifle.unlinked, true) eq(rifle.alive, false) eq(r.rifles[t], nil)
+	-- With no rifle out the game's call runs untouched.
+	r:through_rifles(function() eq(U.flow_event, flow) end)
+end)
+
+test("only_perforators_get_a_rifle_and_a_vanished_turret_loses_it", function()
+	local g = game()
+	armoury(g)
+	local r = pt.runtime(g.env)
+	eq(r:install(), true)
+	local rail = g.turret(1)
+	local rctx = { state = {} }
+	r:reloaded(rail, rctx, g.component)
+	eq(r.rifles[rail], nil, "a Railcannon Turret stays bare") eq(rctx.state.raycast_slave, nil)
+	-- Not able to mount: the turret keeps firing as it was, and the log says why.
+	g.globals.World.spawn_unit = function() error("no unit") end
+	local t = g.turret(5)
+	r:reloaded(t, { state = {} }, g.component)
+	eq(r.rifles[t], nil)
+	yes(g.logs[#g.logs]:find("no unit", 1, true), "logged")
+	-- A turret gone without remove_slave is swept on the next check.
+	g.globals.World.spawn_unit = function(_, path) return { path = path } end
+	local gone = g.turret(4)
+	r:reloaded(gone, { state = {} }, g.component)
+	local rifle = r.rifles[gone].unit
+	gone.alive = false
+	r:frame(2)
+	eq(r.rifles[gone], nil) eq(rifle.alive, false)
+	-- A lobby that stops being cleared takes the rifles off.
+	local kept = g.turret(4)
+	r:reloaded(kept, { state = {} }, g.component)
+	r:uninstall()
+	eq(next(r.rifles), nil)
+end)
+
+test("railcannon_and_other_turrets_are_never_touched", function()
 	local g = game()
 	local r = pt.runtime(g.env)
 	r:install()
@@ -319,10 +430,10 @@ test("minigun_and_other_turrets_are_never_touched", function()
 	ctx.state.weapon_info = s.weapon_info
 	r:watch(g.component, rail, ctx, true)
 	r:watch(g.component, rail, ctx, false)
-	local other = g.turret(0, "gameobjects/gameobject_hellpod_railcannon_turret")
-	local mctx = { state = { weapon_info = "railcannon" } }
-	r:watch(g.component, other, mctx, true)
-	eq(r.slaves[other], nil, "not the Minigun Turret unit")
+	local minigun = g.turret(0, "gameobjects/gameobject_hellpod_minigun_turret")
+	local mctx = { state = { weapon_info = "minigun" } }
+	r:watch(g.component, minigun, mctx, true)
+	eq(r.slaves[minigun], nil, "not the Railcannon Turret unit")
 	for _ = 1, 120 do r:frame(0.1) end
 	eq(ctx.state.weapon_info, s.weapon_info) eq(g.reloads, 0)
 	eq(next(r.slaves), nil, "the watch ends") eq(next(r.masters), nil)
@@ -380,13 +491,13 @@ test("obsidian_api_takes_the_entry", function()
 	local path = api_file()
 	if not path then return "skip" end
 	local rail = {
-		name = "stratagem_turret", id = 2, activate_sound = "radio_defense_confirm", cooldown_time = 180, description = "stratagem_turret_d",
-		despawn_time = 1.4, flare_type = "normal", icon = "stratagem_turret", num_uses = 3, spawn_hellpod = true, stratagem_type = "defensive",
+		name = "stratagem_turret_railcannon", id = 2, activate_sound = "radio_defense_confirm", cooldown_time = 180, description = "stratagem_turret_railcannon_d",
+		despawn_time = 1.4, flare_type = "normal", icon = "stratagem_turret_railcannon", num_uses = 3, spawn_hellpod = true, stratagem_type = "defensive",
 		unit = pt.UNIT, validate_position = true, activation_time = 7, combo = { "left", "down", "up", "left", "right" },
 		stratagem_subtypes = { "turret", "defensive" }, patrol_alert_radius = 80, attributes = { attr_durability = 3, attr_firerate = 1, attr_power = 3, attr_turnspeed = 2 },
 		upgrades = {
-			{ cost = 2, upgrade_description = "stratagem_turret_d_mk2", upgrade_name = "stratagem_turret_mk2", upgrade_attributes = { attr_firerate = 2 } },
-			{ cooldown_time = 120, cost = 2, upgrade_description = "stratagem_turret_d_mk3", upgrade_name = "stratagem_turret_mk3", upgrade_attributes = { attr_turnspeed = 4 } },
+			{ cost = 2, upgrade_description = "stratagem_turret_railcannon_d_mk2", upgrade_name = "stratagem_turret_railcannon_mk2", upgrade_attributes = { attr_firerate = 2 } },
+			{ cooldown_time = 120, cost = 2, upgrade_description = "stratagem_turret_railcannon_d_mk3", upgrade_name = "stratagem_turret_railcannon_mk3", upgrade_attributes = { attr_turnspeed = 4 } },
 		},
 	}
 	local ls = { stratagems = { { name = "stratagem_resupply", id = 1, combo = { "down", "down", "up", "right" }, upgrades = {} }, rail } }
@@ -409,7 +520,7 @@ test("obsidian_api_takes_the_entry", function()
 		yes(made, "defined: " .. tostring(why))
 		local e = ls.stratagems[made.id]
 		eq(e.num_uses, 3) eq(e.cooldown_time, 180) eq(e.activation_time, 7)
-		eq(e.unit, pt.UNIT, "the Minigun Turret lands")
+		eq(e.unit, pt.UNIT, "the Railcannon Turret lands")
 		eq(table.concat(e.combo, " "), "left down up up right")
 		eq(e.icon, pt.ICON)
 		eq(e.upgrades[1].cost, 2) eq(e.upgrades[2].cost, 2)

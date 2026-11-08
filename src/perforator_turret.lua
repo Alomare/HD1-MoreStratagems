@@ -1,35 +1,38 @@
--- The A/MG-15 Perforator Turret: the Minigun Turret firing a stream of AR-20L 'Justice' rounds. The
--- turret model plays the shot, the tracer and the sound from the unit's own flow, so the Minigun Turret's
--- is what makes these bullets (internal/perforator-research.md).
+-- The A/MG-15 Perforator Turret: the Railcannon Turret with an AR-20L 'Justice' mounted on the barrel,
+-- firing a stream of Justice rounds (internal/perforator-research.md).
+--
+-- The shot's look and sound live in the flow of whichever unit fires, so the turret's own events would
+-- play the rail shot. Every machine mounts a real Justice on the turret and hands the rifle the events
+-- of each shot: the rifle plays the muzzle flash, the tracer and the sound. The turret stays the shooter
+-- as far as damage goes, since a hit names the attacker to other machines and the rifle exists on one
+-- machine only.
 --
 -- How: the turret reads weapon_info and turret_info from the settings variant stored for the unit path
 -- and upgrade value (LoadoutSettings.get_upgraded_settings, turret_component.lua:14-21, 49, 173). The
--- game stores variants for the Minigun Turret at upgrade values 1 and 2 only, so this module adds
+-- game stores variants for the Railcannon Turret at upgrade values 1 and 2 only, so this module adds
 -- three more at 4, 5 and 6 (Mk1 to Mk3) on every machine. The thrower's machine adds 4 to the upgrade
 -- value the hellpod hands the turret (hellpod_component.lua:13, 19-23); the turret replicates the value
--- (a uint4 game object field), so every machine picks the same variant. Minigun Turrets keep 0 to 2.
+-- (a uint4 game object field), so every machine picks the same variant. Railcannon Turrets keep 0 to 2.
 local M = {}
 
 M.NAME = "stratagem_turret_perforator"
 M.TITLE = "A/MG-15 Perforator Turret"
-M.BASE = "stratagem_turret"
+M.BASE = "stratagem_turret_railcannon"
 M.TYPE = "defensive"
 -- Neither a prefix of a vanilla code nor prefixed by one (tests/test_perforator.lua checks all 55).
 M.CODE = { "left", "down", "up", "up", "right" }
--- The Minigun Turret is a starting stratagem, and this one shouldn't be: the rank the Railcannon Turret
--- comes around, as a reward of planets of difficulty 5 and up.
-M.UNLOCK = { rank = 10 }
 -- The sub-material in the icon material that tools/build_icon.py writes.
 M.ICON = "perforator_turret_icon"
 M.ICON_MATERIAL = "more_stratagems/icons"
 -- The Loadout bars, on the game's 1 to 4 scale: the Minigun Turret (75 power, 1300 a minute) shows 3 power
--- and 4 fire rate. upgrade_attributes are the new values, not steps.
+-- and 4 fire rate, the Railcannon Turret 1 fire rate. upgrade_attributes are the new values, not steps.
 M.ATTRIBUTES = { attr_durability = 3, attr_firerate = 3, attr_power = 3, attr_stability = 4, attr_turnspeed = 2 }
 
 local BASE_TEXT = "Call in an automatic turret that fires a rapid stream of AR-20L 'Justice' rounds with a tighter spread than the rifle."
 	.. " The turret is capable of distinguishing friend from foe, but stay out of the line of fire. The rounds do not pierce heavy armor."
 M.DESCRIPTION = BASE_TEXT
--- Mk2 doubles the fire rate, Mk3 adds faster turning and a 120 second cooldown. The upgrade texts replace the base one in the menus, so each restates it.
+-- The Railcannon Turret's levels and costs: Mk2 doubles the fire rate, Mk3 adds faster turning and a
+-- 120 second cooldown. The upgrade texts replace the base one in the menus, so each restates it.
 M.UPGRADES = {
 	{ title = M.TITLE .. " Mk2", cost = 2, upgrade_attributes = { attr_firerate = 4 },
 		description = BASE_TEXT .. " An improved feed mechanism allows for a higher rate of fire." },
@@ -40,8 +43,8 @@ M.UPGRADES = {
 -- variants above the game's levels alone when an edit rebuilds the game's own.
 M.MIN_API = { 1, 43, 0 }
 
--- The turret unit the Minigun Turret calls down, and the Justice.
-M.UNIT = "gameobjects/gameobject_hellpod_minigun_turret"
+-- The turret unit the Railcannon Turret calls down, and the Justice.
+M.UNIT = "gameobjects/gameobject_hellpod_railcannon_turret"
 M.RIFLE = "equipment/wep_assaultrifle_02"
 -- Upgrade values 4 to 6: UpgradeableComponent takes 0 to 15 (upgradeable_component.lua:11-12) and plays
 -- no flow event for a level the turret has no upgrade_info for (:40-48).
@@ -49,18 +52,29 @@ M.OFFSET = 4
 M.LEVELS = 3
 -- The Justice's own numbers (equipment/wep_assaultrifle_02.lua:7), used for any the game doesn't answer.
 M.JUSTICE = { firerate = 400, power = 120, power_crit = 150, range = 30, effect_hit = "projectile_heavy", armorpiercing = false }
--- 15 percent faster than the Justice at Mk1; Mk2 and Mk3 double that.
+-- 15 percent faster than the Justice at Mk1; Mk2 and Mk3 double that, as the Railcannon Turret Mk2 does.
 M.RATE_GAIN = 1.15
 -- Degrees off the barrel for every round (turret_component.lua:464 passes no fraction flag, so
 -- get_random_spread uses the full angle). The Justice opens from 0 to 15 degrees as it fires and holds
 -- about 2.5 in sustained fire; 1.5 is well inside both.
 M.SPREAD = 1.5
--- The Minigun Turret's own aim and grace time keep the stream going. Only the rounds change: with
--- infinite_ammo the count resets when it runs out, a jump each machine sees late. At 920 a minute the
--- turret's 120 seconds use 1840, so no reset comes in a turret's life.
-M.TURRET = { rounds = 3000 }
--- Turns of the barrel a second, at Mk1 to Mk3.
-M.TURN = { 0.23, 0.23, 0.3 }
+-- turret_info for a stream rather than a rail shot:
+--   rounds 3000: with infinite_ammo the count resets when it runs out, a jump each machine sees late. At
+--     920 a minute the turret's 120 seconds use 1840, so no reset comes in a turret's life.
+--   fire_cooldown 0.5: keeps firing that long after the barrel drifts off the target, as the Minigun.
+--   angle_to_target_diff_before_shooting 0.07: as the Minigun; the Railcannon's 0.001 cuts the stream on
+--     every small correction.
+--   targeting_mode "angle": what the barrel already faces first, as the Minigun; "size" chases the
+--     biggest target, which suits a rail and not rounds that don't pierce armor.
+M.TURRET = { rounds = 3000, fire_cooldown = 0.5, angle_to_target_diff_before_shooting = 0.07, targeting_mode = "angle" }
+
+-- The rifle on the barrel: the turret's turning node, and metres from it in that node's frame (y along the
+-- barrel, z up). Where it sits is a matter of looks: change these to move it.
+M.MOUNT_NODE = "j_rotate_side"
+M.MOUNT = { x = 0, y = 0.25, z = 0.3 }
+-- What a shot says to the unit firing it (turret_component.lua, weapon_utility.lua): these go to the rifle.
+M.SHOT_EVENTS = { fire_start = true, fire_round = true, fire_end = true, on_raycast = true }
+M.SHOT_VARIABLES = { hit_position = true, hit = true, hit_normal = true }
 
 -- Whether a version string such as "1.43.0" is at least the list given.
 function M.at_least(version, want)
@@ -85,7 +99,6 @@ function M.def()
 		description = M.DESCRIPTION,
 		type = M.TYPE,
 		code = M.CODE,
-		unlock = M.UNLOCK,
 		icon = M.ICON,
 		icon_material = M.ICON_MATERIAL,
 		attributes = M.ATTRIBUTES,
@@ -152,7 +165,7 @@ end
 
 -- The weapon_info of a level from the Justice's numbers ({ firerate, power, power_crit, range,
 -- effect_hit, armorpiercing }). unstoppable is set false outright, rather than left out, so nothing of the
--- game turret's is kept.
+-- rail's is kept.
 function M.weapon(justice, level)
 	return {
 		automatic = true,
@@ -166,8 +179,9 @@ function M.weapon(justice, level)
 	}
 end
 
--- The Perforator's settings for a level (0 is Mk1) from the Minigun Turret's base settings: the
--- Minigun's own level (health, life, map icon), with the Justice's weapon and the stream's turret_info.
+-- The Perforator's settings for a level (0 is Mk1) from the Railcannon Turret's base settings: the
+-- Railcannon's own level (health, life, map icon, turn speed), with the Justice's weapon and the stream's
+-- turret_info.
 function M.variant(rail, level, justice)
 	rail = raw(rail)
 	local v = copy(rail)
@@ -178,7 +192,6 @@ function M.variant(rail, level, justice)
 	v.weapon_info = M.weapon(justice, level)
 	if type(v.turret_info) ~= "table" then v.turret_info = {} end
 	for k, value in pairs(M.TURRET) do v.turret_info[k] = value end
-	v.turret_info.turn_speed_target = M.TURN[level + 1]
 	return v
 end
 
@@ -238,6 +251,8 @@ function M.runtime(env)
 		masters = setmetatable({}, { __mode = "k" }), -- unit -> { component, ctx, left }
 		slaves = setmetatable({}, { __mode = "k" }),
 		built = setmetatable({}, { __mode = "k" }), -- slave state -> weapon_info the raycast was made with
+		rifles = setmetatable({}, { __mode = "k" }), -- turret unit -> { unit, world }
+		redirecting = false,
 	}, R)
 end
 
@@ -310,7 +325,7 @@ function R:install()
 end
 
 -- The lobby stopped being cleared: the game's table goes back to the game's levels. Turrets standing
--- keep the tables they hold and fire as before; one set up later is a plain Minigun Turret.
+-- keep the tables they hold and fire as before; one set up later is a plain Railcannon Turret.
 function R:uninstall()
 	local lsm = self:lsm()
 	local map = lsm and lsm.unit_path_to_modified_settings
@@ -324,6 +339,68 @@ function R:uninstall()
 	self.installed = false
 	self.masters = setmetatable({}, { __mode = "k" })
 	self.slaves = setmetatable({}, { __mode = "k" })
+	for unit in pairs(self.rifles) do self:dismount(unit) end
+end
+
+-- Runs fn(...) with the shot events and hit variables of a turret carrying a rifle sent to the rifle
+-- instead. Only for the length of the call, so the game's calls cost nothing the rest of the time.
+function R:through_rifles(fn, ...)
+	local U = self.env.global("Unit")
+	if self.redirecting or next(self.rifles) == nil or type(U) ~= "table" then return fn(...) end
+	local rifles = self.rifles
+	local flow, variable, alive = U.flow_event, U.set_flow_variable, U.alive
+	local function rifle_of(unit, known, name)
+		local r = known[name] and rifles[unit]
+		return r and alive(r.unit) and r.unit or nil
+	end
+	U.flow_event = function(unit, event, ...)
+		return flow(rifle_of(unit, M.SHOT_EVENTS, event) or unit, event, ...)
+	end
+	U.set_flow_variable = function(unit, name, value)
+		return variable(rifle_of(unit, M.SHOT_VARIABLES, name) or unit, name, value)
+	end
+	self.redirecting = true
+	local ok, err = pcall(fn, ...)
+	self.redirecting = false
+	U.flow_event, U.set_flow_variable = flow, variable
+	if not ok then error(err, 0) end
+end
+
+-- Puts a Justice on a turret running on the Perforator's settings, and makes the slave raycast again with
+-- the shot's effects sent to the rifle. As reload_slave makes it (turret_component.lua:179), with the
+-- turret as the shooter. A rifle that can't be mounted leaves the turret firing as it was.
+function R:mount(component, unit, ctx, settings)
+	local G = self.env.global
+	local W, U, physics, weapons = G("World"), G("Unit"), G("PhysicsWorld"), G("WeaponUtility")
+	local world = component.world_proxy:get_world()
+	if not self.rifles[unit] then
+		local node = U.node(unit, M.MOUNT_NODE)
+		local rifle = W.spawn_unit(world, M.RIFLE, U.world_position(unit, node), U.world_rotation(unit, node))
+		U.set_unit_visibility(rifle, true)
+		W.link_unit(world, rifle, 0, unit, node)
+		U.set_local_position(rifle, 0, G("Vector3")(M.MOUNT.x, M.MOUNT.y, M.MOUNT.z))
+		U.set_local_rotation(rifle, 0, G("Quaternion").identity())
+		self.rifles[unit] = { unit = rifle, world = world }
+	end
+	local st = ctx.state
+	local shot = weapons.shoot_ray_callback(unit, ctx, component, { x = 0, y = 0, z = 0 }, false, settings.weapon_info, settings.explosive_info, st.owner_unit)
+	st.raycast_slave = physics.make_raycast(W.physics_world(world), function(...) self:through_rifles(shot, ...) end,
+		"all", "collision_filter", "damage_ray")
+end
+
+-- Takes the rifle off a turret that is going away.
+function R:dismount(unit)
+	local rifle = self.rifles[unit]
+	if not rifle then return end
+	self.rifles[unit] = nil
+	local G = self.env.global
+	local ok, err = pcall(function()
+		if G("Unit").alive(rifle.unit) then
+			G("World").unlink_unit(rifle.world, rifle.unit)
+			G("World").destroy_unit(rifle.world, rifle.unit)
+		end
+	end)
+	if not ok then self:log(err) end
 end
 
 -- The hook on HellpodComponent.setup_master, before the original runs.
@@ -331,7 +408,7 @@ function R:hellpod(setup)
 	local ok, err = pcall(function()
 		if type(setup) ~= "table" or type(setup.stratagem_info) ~= "table" or setup.stratagem_info.name ~= M.NAME then return end
 		if not self:install() then
-			self:log("the variants could not be installed; this one lands as a Minigun Turret")
+			self:log("the variants could not be installed; this one lands as a Railcannon Turret")
 			return
 		end
 		M.mark(setup)
@@ -364,11 +441,12 @@ end
 
 -- After TurretComponent.reload_slave: the settings the slave raycast was just made with (the same call
 -- reload_slave makes, turret_component.lua:173).
-function R:reloaded(unit, ctx)
+function R:reloaded(unit, ctx, component)
 	local ok, err = pcall(function()
 		if not (type(ctx) == "table" and type(ctx.state) == "table" and self:is_turret(unit)) then return end
 		local s = self:settings_of(unit)
 		self.built[ctx.state] = s and s.weapon_info or false
+		if component and s and self.ours[s.weapon_info] then self:mount(component, unit, ctx, s) end
 	end)
 	if not ok then self:log(err) end
 end
@@ -424,6 +502,11 @@ function R:frame(dt)
 		self.timer = CHECK_EVERY
 		local ok, err = pcall(self.install, self)
 		if not ok then self:log(err) end
+		-- A turret removed without the game saying so.
+		for unit in pairs(self.rifles) do
+			local checked, alive = pcall(self.env.alive, unit)
+			if not (checked and alive) then self:dismount(unit) end
+		end
 	end
 	if not self.installed then return end
 	if next(self.masters) then self:tend(self.masters, dt, false) end
