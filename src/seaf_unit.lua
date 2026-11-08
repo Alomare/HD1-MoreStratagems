@@ -33,7 +33,7 @@ M.UPGRADES = {
 -- The lowest Obsidian API version the stratagem is defined on, and the lowest one soldiers come with
 -- (guest bots on any machine, looks, deaths, pickups and the lobby calls of 1.41.0; the default loadout,
 -- fight's best weapon and the weapon's range of 1.42.0).
-M.MIN_API = { 1, 12, 0 }
+M.MIN_API = { 1, 43, 0 }
 M.BOTS_API = { 1, 42, 0 }
 
 -- Whether a version string such as "1.22.0" is at least the list given.

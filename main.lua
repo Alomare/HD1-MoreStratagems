@@ -1,6 +1,7 @@
 -- More Stratagems: new stratagems for HELLDIVERS (2015).
 local seaf_unit = obsidian.module("src/seaf_unit")
 local seaf_squad = obsidian.module("src/seaf_squad")
+local homing = obsidian.module("src/homing_payload")
 
 local api = obsidian.import("obsidian.api")
 local api_info = obsidian.info and obsidian.info("obsidian.api")
@@ -44,6 +45,56 @@ local function define()
 end
 if not define() then obsidian.on_frame(define) end
 
+-- Homing Payload. The missiles need Obsidian API 1.43.0 (api.world.projectile). With an older one the
+-- stratagem is still defined, so a saved loadout keeps it, and a call gives the use back and says why.
+local fire_ready = api_info ~= nil and seaf_unit.at_least(api_info.version, homing.FIRE_API)
+local barrage = fire_ready and homing.new(function(start, direction, owner)
+	return api.world.projectile(homing.MISSILE, start, { direction = direction, owner = owner or false })
+end, obsidian.log) or nil
+
+local function homing_refused(owner)
+	obsidian.log("Homing Payload: the missiles need Obsidian API " .. table.concat(homing.FIRE_API, ".") .. " or later; the use is given back")
+	pcall(api.stratagems.give, homing.NAME, owner)
+end
+
+local function homing_call(pos, upgrade, owner)
+	return barrage:call(pos, upgrade, owner)
+end
+
+local function define_homing()
+	if api_info and not seaf_unit.at_least(api_info.version, homing.MIN_API) then
+		obsidian.log("Homing Payload not added: needs Obsidian API " .. table.concat(homing.MIN_API, ".") .. " or later")
+		return true
+	end
+	local made, why = api.stratagems.define(homing.def(barrage and homing_call or nil, homing_refused))
+	if why == "not_ready" then return false end
+	if not made and why ~= "taken" then obsidian.log("Homing Payload not added: " .. tostring(why)) end
+	return true
+end
+if not define_homing() then obsidian.on_frame(define_homing) end
+
+if barrage then
+	-- The missiles still to come, spaced by game time. Outside a mission there is nothing to fire at.
+	obsidian.on_frame(function()
+		if barrage:idle() then return end
+		if not api.game.in_mission() then
+			barrage:clear()
+			return
+		end
+		local dt = rawget(_G, "GAME_DT") or rawget(_G, "ENGINE_DT") or 0.016
+		local ok, err = pcall(barrage.tick, barrage, dt)
+		if not ok then
+			obsidian.log("Homing Payload: " .. tostring(err))
+			barrage:clear()
+		end
+	end)
+	obsidian.on_session(function(on)
+		if not on then barrage:clear() end
+	end)
+else
+	obsidian.log("Homing Payload: Obsidian API " .. tostring(api_info and api_info.version) .. " is older than " .. table.concat(homing.FIRE_API, ".") .. "; the missiles can't come")
+end
+
 if squad then
 	local wait = 0
 	obsidian.on_frame(function()
@@ -64,6 +115,57 @@ if squad then
 	end)
 else
 	obsidian.log("SEAF Unit: Obsidian API " .. tostring(api_info and api_info.version) .. " is older than " .. table.concat(seaf_unit.BOTS_API, ".") .. "; soldiers can't come")
+end
+
+-- The A/MG-15 Perforator Turret: settings variants of the Railcannon Turret on every machine, and the
+-- thrower's hellpod handing the turret an upgrade value that picks them (src/perforator_turret).
+local perforator = obsidian.module("src/perforator_turret")
+local perforator_ready = api_info ~= nil and perforator.at_least(api_info.version, perforator.MIN_API)
+
+local function define_perforator()
+	local made, why = api.stratagems.define(perforator.def())
+	if why == "not_ready" then return false end
+	if not made and why ~= "taken" then obsidian.log("Perforator Turret not added: " .. tostring(why)) end
+	return true
+end
+
+if perforator_ready then
+	if not define_perforator() then obsidian.on_frame(define_perforator) end
+	local Unit = function() return rawget(_G, "Unit") end
+	local turrets = perforator.runtime({
+		global = function(name) return rawget(_G, name) end,
+		log = obsidian.log,
+		original = api.edits and api.edits.original,
+		unit_path = function(unit) return Unit().get_data(unit, "unit_path") end,
+		alive = function(unit) return Unit().alive(unit) end,
+	})
+	obsidian.hook("HellpodComponent", "setup_master", function(original, component, unit, ctx, setup, ...)
+		turrets:hellpod(setup)
+		return original(component, unit, ctx, setup, ...)
+	end)
+	obsidian.hook("TurretComponent", "setup_master", function(original, component, unit, ctx, ...)
+		original(component, unit, ctx, ...)
+		turrets:watch(component, unit, ctx, false)
+	end)
+	obsidian.hook("TurretComponent", "setup_slave", function(original, component, unit, ctx, ...)
+		original(component, unit, ctx, ...)
+		turrets:watch(component, unit, ctx, true)
+	end)
+	obsidian.hook("TurretComponent", "reload_slave", function(original, component, unit, ctx, ...)
+		original(component, unit, ctx, ...)
+		turrets:reloaded(unit, ctx)
+	end)
+	obsidian.on_frame(function()
+		turrets:frame(rawget(_G, "ENGINE_DT") or 0.016)
+	end)
+	obsidian.on_session(function(on)
+		if not on then
+			local ok, err = pcall(turrets.uninstall, turrets)
+			if not ok then obsidian.log("Perforator Turret: " .. tostring(err)) end
+		end
+	end)
+else
+	obsidian.log("Perforator Turret not added: needs Obsidian API " .. table.concat(perforator.MIN_API, ".") .. " or later")
 end
 
 obsidian.log("More Stratagems ready")

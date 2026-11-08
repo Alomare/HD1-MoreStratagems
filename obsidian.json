@@ -6,7 +6,7 @@
     "en": "More Stratagems"
   },
   "description": {
-    "en": "New stratagems for HELLDIVERS (2015). Adds the SEAF Unit, which calls down AI SEAF soldiers who fight beside the squad. Every player needs the mod."
+    "en": "New stratagems for HELLDIVERS (2015): the SEAF Unit, AI soldiers who fight beside the squad; Homing Payload, a barrage of homing missiles onto the beacon; and the A/MG-15 Perforator Turret, a fast-firing turret. Every player needs the mod."
   },
   "authors": [
     "Alomare"
@@ -21,7 +21,9 @@
     "src/seaf_registry.lua",
     "src/seaf_heir.lua",
     "src/seaf_squad.lua",
-    "src/seaf_look.lua"
+    "src/seaf_look.lua",
+    "src/homing_payload.lua",
+    "src/perforator_turret.lua"
   ],
   "requires": [
     "obsidian.api"

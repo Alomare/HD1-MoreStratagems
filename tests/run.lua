@@ -30,7 +30,7 @@ function yes(v, what)
 	if not v then error((what or "condition") .. " is false", 2) end
 end
 
-for _, file in ipairs({ "tests/test_define.lua", "tests/test_texts.lua", "tests/test_logic.lua", "tests/test_squad.lua", "tests/test_look.lua" }) do
+for _, file in ipairs({ "tests/test_define.lua", "tests/test_texts.lua", "tests/test_logic.lua", "tests/test_squad.lua", "tests/test_look.lua", "tests/test_homing.lua", "tests/test_perforator.lua" }) do
 	local tests = dofile(file)
 	for _, t in ipairs(tests) do test(file .. " " .. t[1], t[2]) end
 end
