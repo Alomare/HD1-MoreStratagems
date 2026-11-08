@@ -20,18 +20,21 @@ M.ICON = "homing_payload_icon"
 M.ICON_MATERIAL = "more_stratagems/icons"
 -- Seconds of cooldown, and seconds from call-in to the first missile. No uses field: unlimited.
 M.COOLDOWN = 90
+M.COOLDOWN_UPGRADED = 75
 M.CALL_IN = 1.5
 -- What the Loadout screen shows: the bars and tags, then the power at each Mk.
 M.ATTRIBUTES = { attr_power = 3, attr_spec_anti_tank = true, attr_spec_explosive = true, attr_spec_homing = true }
 
 -- The missile, by the name Obsidian API fires it under (api.world.PROJECTILES).
 M.MISSILE = "air_support_missile"
--- Metres above the beacon each missile starts, and metres off the line straight up from the beacon. The
--- missile picks targets within 15 metres of itself, so it starts looking on the way down.
+-- Metres above the beacon each missile starts, and metres off the line straight up from the beacon.
 M.HEIGHT = 25
 M.SPREAD = 2
+-- Metres around the beacon in which each missile is handed an enemy at launch. Left to look for one, a
+-- missile sees only 15 metres around itself, so from this height it finds one too low to turn.
+M.REACH = 20
 -- Missiles per call and seconds between two, by Mk.
-M.SALVOS = { { count = 5, gap = 0.5 }, { count = 6, gap = 0.4 }, { count = 7, gap = 0.3 } }
+M.SALVOS = { { count = 5, gap = 0.5 }, { count = 5, gap = 0.5 }, { count = 7, gap = 0.4 } }
 
 -- In the game's style: the upgrade texts replace this one in the menus, so each restates it with the
 -- change worked in (internal/native-texts.md).
@@ -42,17 +45,19 @@ local function text(count, change)
 		.. " The missiles do NOT spare Helldivers caught in the blast."
 end
 M.DESCRIPTION = text("five")
+-- Both levels state the shorter cooldown: a level is one bit, and the game lays each bought level over
+-- the entry.
 M.UPGRADES = {
-	{ title = "Homing Payload Mk2", description = text("six", "An improved release mechanism sends them down in quicker succession."),
-		cost = 1, power = 4 },
-	{ title = "Homing Payload Mk3", description = text("seven", "A further improved release mechanism sends them down in very quick succession."),
-		cost = 2, power = 5 },
+	{ title = "Homing Payload Mk2", description = text("five", "Improved routines for rearming the fighter allow the payload to be called more often."),
+		cost = 1, power = 4, stats = { cooldown_time = M.COOLDOWN_UPGRADED } },
+	{ title = "Homing Payload Mk3", description = text("seven", "Improved routines for rearming the fighter allow the payload to be called more often and an improved release mechanism sends the missiles down in quicker succession."),
+		cost = 2, power = 5, stats = { cooldown_time = M.COOLDOWN_UPGRADED } },
 }
 
 -- The lowest Obsidian API version the stratagem is defined on, and the lowest one that fires the
--- missiles (api.world.projectile, 1.43.0).
-M.MIN_API = { 1, 43, 0 }
-M.FIRE_API = { 1, 43, 0 }
+-- missiles at a target (the target option of api.world.projectile, 1.44.0).
+M.MIN_API = { 1, 44, 0 }
+M.FIRE_API = { 1, 44, 0 }
 
 -- The Mk of a call from the upgrade value the game hands on_activate: one bit per level bought
 -- (LoadoutSettings.get_upgraded_stratagem), so 1 is Mk2, and 2 or 3 is Mk3.
@@ -92,13 +97,21 @@ function M.shot(i, count, pos)
 	return start, direction
 end
 
--- The barrages in flight. fire(start, direction, owner) sends one missile and answers something, or nil
--- and a reason; log(text) says what went wrong.
+-- The enemy missile i goes for, out of the ones near the beacon, nearest first: every enemy gets one before
+-- any gets two. nil with none around, and the missile then falls on the beacon and looks for one itself.
+function M.target(i, enemies)
+	if type(enemies) ~= "table" or #enemies == 0 then return nil end
+	return enemies[(i - 1) % #enemies + 1]
+end
+
+-- The barrages in flight. fire(start, direction, owner, target) sends one missile and answers something,
+-- or nil and a reason; log(text) says what went wrong; near(pos) lists the enemies around the beacon,
+-- nearest first, and may be left out.
 local Barrage = {}
 Barrage.__index = Barrage
 
-function M.new(fire, log)
-	return setmetatable({ fire = fire, log = log or function() end, jobs = {} }, Barrage)
+function M.new(fire, log, near)
+	return setmetatable({ fire = fire, log = log or function() end, near = near, jobs = {} }, Barrage)
 end
 
 -- A landed beacon: pos as plain numbers. The first missile goes at once, the rest by tick().
@@ -117,7 +130,11 @@ function Barrage:tick(dt)
 		while job.fired < job.count and job.wait <= 0 do
 			job.fired = job.fired + 1
 			local start, direction = M.shot(job.fired, job.count, job)
-			local ok, sent, why = pcall(self.fire, start, direction, job.owner)
+			-- Looked up for each missile: the enemies of a moment ago may be dead.
+			local listed, enemies = false, nil
+			if self.near then listed, enemies = pcall(self.near, job) end
+			local target = listed and M.target(job.fired, enemies) or nil
+			local ok, sent, why = pcall(self.fire, start, direction, job.owner, target)
 			if not (ok and sent) then
 				self.log("Homing Payload: missile " .. job.fired .. " of " .. job.count .. " not fired: " .. tostring(ok and why or sent))
 				job.fired = job.count
@@ -143,7 +160,7 @@ end
 function M.def(call_in, refused)
 	local upgrades = {}
 	for i, u in ipairs(M.UPGRADES) do
-		upgrades[i] = { title = u.title, description = u.description, cost = u.cost, upgrade_attributes = { attr_power = u.power } }
+		upgrades[i] = { title = u.title, description = u.description, cost = u.cost, stats = u.stats, upgrade_attributes = { attr_power = u.power } }
 	end
 	local attributes = {}
 	for k, v in pairs(M.ATTRIBUTES) do attributes[k] = v end

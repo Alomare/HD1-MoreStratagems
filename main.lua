@@ -45,12 +45,14 @@ local function define()
 end
 if not define() then obsidian.on_frame(define) end
 
--- Homing Payload. The missiles need Obsidian API 1.43.0 (api.world.projectile). With an older one the
+-- Homing Payload. The missiles need Obsidian API 1.44.0 (a target for api.world.projectile). With an older one the
 -- stratagem is still defined, so a saved loadout keeps it, and a call gives the use back and says why.
 local fire_ready = api_info ~= nil and seaf_unit.at_least(api_info.version, homing.FIRE_API)
-local barrage = fire_ready and homing.new(function(start, direction, owner)
-	return api.world.projectile(homing.MISSILE, start, { direction = direction, owner = owner or false })
-end, obsidian.log) or nil
+local barrage = fire_ready and homing.new(function(start, direction, owner, target)
+	return api.world.projectile(homing.MISSILE, start, { direction = direction, owner = owner or false, target = target })
+end, obsidian.log, function(pos)
+	return api.enemies.near(homing.REACH, api.game.global("Vector3")(pos.x, pos.y, pos.z))
+end) or nil
 
 local function homing_refused(owner)
 	obsidian.log("Homing Payload: the missiles need Obsidian API " .. table.concat(homing.FIRE_API, ".") .. " or later; the use is given back")

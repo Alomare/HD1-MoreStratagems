@@ -37,7 +37,7 @@ test("the_def_has_the_numbers_and_names", function()
 	eq(#def.upgrades, 2, "a Mk2 and Mk3 made for it, not the Airstrike levels")
 	eq(def.upgrades[1].title, "Homing Payload Mk2") eq(def.upgrades[2].title, "Homing Payload Mk3")
 	eq(def.upgrades[1].cost, 1) eq(def.upgrades[2].cost, 2)
-	eq(def.upgrades[1].stats, nil, "no level changes the call-in or cooldown")
+	eq(def.upgrades[1].stats.cooldown_time, 75, "Mk2 cooldown") eq(def.upgrades[2].stats.cooldown_time, 75, "Mk3 keeps it")
 	eq(def.attributes.attr_spec_homing, true)
 	eq(def.upgrades[2].upgrade_attributes.attr_power, 5)
 	eq(type(def.on_activate), "function")
@@ -54,9 +54,9 @@ test("the_code_collides_with_no_game_code_either_way", function()
 	end
 end)
 
-test("each_mk_fires_more_missiles_closer_together", function()
+test("mk1_and_mk2_fire_the_same_barrage_and_mk3_a_bigger_one", function()
 	eq(homing.mk(0), 1) eq(homing.mk(nil), 1) eq(homing.mk(1), 2) eq(homing.mk(2), 3) eq(homing.mk(3), 3, "both levels bought")
-	local want = { { 5, 0.5 }, { 6, 0.4 }, { 7, 0.3 } }
+	local want = { { 5, 0.5 }, { 5, 0.5 }, { 7, 0.4 } }
 	for mk, w in ipairs(want) do
 		local count, gap = homing.salvo(mk)
 		eq(count, w[1], "Mk" .. mk .. " missiles") near(gap, w[2], "Mk" .. mk .. " gap")
@@ -102,10 +102,10 @@ test("a_barrage_fires_on_time_with_plain_numbers_and_the_thrower_as_owner", func
 		clock = clock + 0.05
 		b:tick(0.05)
 	end
-	eq(#shots, 6, "Mk2: six")
+	eq(#shots, 5, "Mk2: five")
 	for i, s in ipairs(shots) do
 		-- On the first frame that reaches the time, so within one frame of it.
-		local late = s.at - (i - 1) * 0.4
+		local late = s.at - (i - 1) * 0.5
 		yes(late > -1e-6 and late < 0.05 + 1e-6, "missile " .. i .. " on time, " .. late .. " late")
 		eq(s.owner, "thrower")
 		eq(getmetatable(s.start), nil, "plain numbers")
@@ -115,8 +115,26 @@ test("a_barrage_fires_on_time_with_plain_numbers_and_the_thrower_as_owner", func
 	b:call({ x = 0, y = 0, z = 0 }, 0, "a")
 	b:call({ x = 50, y = 0, z = 0 }, 3, "b")
 	b:tick(10)
-	eq(#shots, 6 + 5 + 7)
+	eq(#shots, 5 + 5 + 7)
 	yes(b:idle())
+end)
+
+test("each_missile_is_handed_an_enemy_and_every_enemy_gets_one_first", function()
+	eq(homing.target(1, {}), nil, "none around") eq(homing.target(1, nil), nil)
+	eq(homing.target(1, { "a", "b" }), "a") eq(homing.target(2, { "a", "b" }), "b") eq(homing.target(3, { "a", "b" }), "a", "round again")
+	local targets = {}
+	local b = homing.new(function(_, _, _, target) targets[#targets + 1] = target or "none" return true end, nil, function(job)
+		eq(job.x, 4, "asked about the beacon")
+		return { "near", "far" }
+	end)
+	b:call({ x = 4, y = 0, z = 0 }, 0)
+	b:tick(10)
+	eq(table.concat(targets, " "), "near far near far near")
+	-- A list that fails leaves the missile to look for one itself.
+	local got = {}
+	local c = homing.new(function(_, _, _, target) got[#got + 1] = target == nil return true end, nil, function() error("no list") end)
+	c:call({ x = 0, y = 0, z = 0 }, 0)
+	eq(got[1], true)
 end)
 
 test("a_missile_that_fails_ends_the_barrage_and_says_why", function()
@@ -164,8 +182,8 @@ test("a_landed_beacon_calls_the_barrage_and_never_drops_the_airstrike", function
 	local refused = nil
 	eq(homing.def(nil, function(owner) refused = owner end).on_activate({ position = vector, upgrade = 0, owner = "thrower" }), false)
 	eq(refused, "thrower")
-	yes(seaf.at_least("1.43.0", homing.FIRE_API), "1.43.0 fires them")
-	eq(seaf.at_least("1.42.0", homing.FIRE_API), false, "1.42.0 has no api.world.projectile")
+	yes(seaf.at_least("1.44.0", homing.FIRE_API), "1.44.0 fires them")
+	eq(seaf.at_least("1.43.0", homing.FIRE_API), false, "1.43.0 can't hand a missile a target")
 end)
 
 -- The words players read, by the rules of tests/test_texts.lua, and in the game's style: each upgrade
@@ -194,13 +212,13 @@ test("the_words_keep_the_rules_and_each_level_restates_the_one_before", function
 	yes(homing.DESCRIPTION:find("five homing missiles", 1, true), "the count")
 	yes(homing.DESCRIPTION:find("NOT spare Helldivers", 1, true), "the caveat")
 	local mk2, mk3 = homing.UPGRADES[1].description, homing.UPGRADES[2].description
-	yes(mk2:find("six homing missiles", 1, true) and mk3:find("seven homing missiles", 1, true), "the counts")
+	yes(mk2:find("five homing missiles", 1, true) and mk3:find("seven homing missiles", 1, true), "the counts")
 	yes(mk2:find("NOT spare Helldivers", 1, true) and mk3:find("NOT spare Helldivers", 1, true), "the caveat stays")
-	yes(mk2:find("quicker succession", 1, true), "the Mk2 change")
-	yes(mk3:find("further improved release mechanism", 1, true), "the Mk3 change builds on the Mk2 one")
+	yes(mk2:find("called more often", 1, true), "the Mk2 change")
+	yes(mk3:find("called more often", 1, true) and mk3:find("quicker succession", 1, true), "Mk3 restates Mk2 and adds the release")
 	-- Every sentence of the base is there, in the same order.
 	local last = 0
-	for sentence in homing.DESCRIPTION:gsub("five", "six"):gmatch("[^%.]+%.") do
+	for sentence in homing.DESCRIPTION:gmatch("[^%.]+%.") do
 		local at = mk2:find(sentence, 1, true)
 		yes(at and at > last, "Mk2 restates: " .. sentence)
 		last = at

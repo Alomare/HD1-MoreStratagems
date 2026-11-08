@@ -1,32 +1,35 @@
--- The A/MG-15 Perforator Turret: the Railcannon Turret with the rail swapped for a fast stream of AR-20L
--- 'Justice' rounds (internal/perforator-research.md).
+-- The A/MG-15 Perforator Turret: the Minigun Turret firing a stream of AR-20L 'Justice' rounds. The
+-- turret model plays the shot, the tracer and the sound from the unit's own flow, so the Minigun Turret's
+-- is what makes these bullets (internal/perforator-research.md).
 --
 -- How: the turret reads weapon_info and turret_info from the settings variant stored for the unit path
 -- and upgrade value (LoadoutSettings.get_upgraded_settings, turret_component.lua:14-21, 49, 173). The
--- game stores variants for the Railcannon Turret at upgrade values 1 and 2 only, so this module adds
+-- game stores variants for the Minigun Turret at upgrade values 1 and 2 only, so this module adds
 -- three more at 4, 5 and 6 (Mk1 to Mk3) on every machine. The thrower's machine adds 4 to the upgrade
 -- value the hellpod hands the turret (hellpod_component.lua:13, 19-23); the turret replicates the value
--- (a uint4 game object field), so every machine picks the same variant. Railcannon Turrets keep 0 to 2.
+-- (a uint4 game object field), so every machine picks the same variant. Minigun Turrets keep 0 to 2.
 local M = {}
 
 M.NAME = "stratagem_turret_perforator"
 M.TITLE = "A/MG-15 Perforator Turret"
-M.BASE = "stratagem_turret_railcannon"
+M.BASE = "stratagem_turret"
 M.TYPE = "defensive"
 -- Neither a prefix of a vanilla code nor prefixed by one (tests/test_perforator.lua checks all 55).
 M.CODE = { "left", "down", "up", "up", "right" }
+-- The Minigun Turret is a starting stratagem, and this one shouldn't be: the rank the Railcannon Turret
+-- comes around, as a reward of planets of difficulty 5 and up.
+M.UNLOCK = { rank = 10 }
 -- The sub-material in the icon material that tools/build_icon.py writes.
 M.ICON = "perforator_turret_icon"
 M.ICON_MATERIAL = "more_stratagems/icons"
 -- The Loadout bars, on the game's 1 to 4 scale: the Minigun Turret (75 power, 1300 a minute) shows 3 power
--- and 4 fire rate, the Railcannon Turret 1 fire rate. upgrade_attributes are the new values, not steps.
+-- and 4 fire rate. upgrade_attributes are the new values, not steps.
 M.ATTRIBUTES = { attr_durability = 3, attr_firerate = 3, attr_power = 3, attr_stability = 4, attr_turnspeed = 2 }
 
 local BASE_TEXT = "Call in an automatic turret that fires a rapid stream of AR-20L 'Justice' rounds with a tighter spread than the rifle."
 	.. " The turret is capable of distinguishing friend from foe, but stay out of the line of fire. The rounds do not pierce heavy armor."
 M.DESCRIPTION = BASE_TEXT
--- The Railcannon Turret's levels and costs: Mk2 doubles the fire rate, Mk3 adds faster turning and a
--- 120 second cooldown. The upgrade texts replace the base one in the menus, so each restates it.
+-- Mk2 doubles the fire rate, Mk3 adds faster turning and a 120 second cooldown. The upgrade texts replace the base one in the menus, so each restates it.
 M.UPGRADES = {
 	{ title = M.TITLE .. " Mk2", cost = 2, upgrade_attributes = { attr_firerate = 4 },
 		description = BASE_TEXT .. " An improved feed mechanism allows for a higher rate of fire." },
@@ -37,8 +40,8 @@ M.UPGRADES = {
 -- variants above the game's levels alone when an edit rebuilds the game's own.
 M.MIN_API = { 1, 43, 0 }
 
--- The turret unit the Railcannon Turret calls down, and the Justice.
-M.UNIT = "gameobjects/gameobject_hellpod_railcannon_turret"
+-- The turret unit the Minigun Turret calls down, and the Justice.
+M.UNIT = "gameobjects/gameobject_hellpod_minigun_turret"
 M.RIFLE = "equipment/wep_assaultrifle_02"
 -- Upgrade values 4 to 6: UpgradeableComponent takes 0 to 15 (upgradeable_component.lua:11-12) and plays
 -- no flow event for a level the turret has no upgrade_info for (:40-48).
@@ -46,21 +49,18 @@ M.OFFSET = 4
 M.LEVELS = 3
 -- The Justice's own numbers (equipment/wep_assaultrifle_02.lua:7), used for any the game doesn't answer.
 M.JUSTICE = { firerate = 400, power = 120, power_crit = 150, range = 30, effect_hit = "projectile_heavy", armorpiercing = false }
--- 15 percent faster than the Justice at Mk1; Mk2 and Mk3 double that, as the Railcannon Turret Mk2 does.
+-- 15 percent faster than the Justice at Mk1; Mk2 and Mk3 double that.
 M.RATE_GAIN = 1.15
 -- Degrees off the barrel for every round (turret_component.lua:464 passes no fraction flag, so
 -- get_random_spread uses the full angle). The Justice opens from 0 to 15 degrees as it fires and holds
 -- about 2.5 in sustained fire; 1.5 is well inside both.
 M.SPREAD = 1.5
--- turret_info for a stream rather than a rail shot:
---   rounds 3000: with infinite_ammo the count resets when it runs out, a jump each machine sees late. At
---     920 a minute the turret's 120 seconds use 1840, so no reset comes in a turret's life.
---   fire_cooldown 0.2: keeps firing that long after the barrel drifts off the target (the Minigun has 0.5).
---   angle_to_target_diff_before_shooting 0.01: a turn is 1, so 3.6 degrees; the Railcannon's 0.001 cuts
---     the stream on every small correction.
---   targeting_mode "angle": what the barrel already faces first, as the Minigun; "size" chases the
---     biggest target, which suits a rail and not rounds that don't pierce armor.
-M.TURRET = { rounds = 3000, fire_cooldown = 0.2, angle_to_target_diff_before_shooting = 0.01, targeting_mode = "angle" }
+-- The Minigun Turret's own aim and grace time keep the stream going. Only the rounds change: with
+-- infinite_ammo the count resets when it runs out, a jump each machine sees late. At 920 a minute the
+-- turret's 120 seconds use 1840, so no reset comes in a turret's life.
+M.TURRET = { rounds = 3000 }
+-- Turns of the barrel a second, at Mk1 to Mk3.
+M.TURN = { 0.23, 0.23, 0.3 }
 
 -- Whether a version string such as "1.43.0" is at least the list given.
 function M.at_least(version, want)
@@ -85,6 +85,7 @@ function M.def()
 		description = M.DESCRIPTION,
 		type = M.TYPE,
 		code = M.CODE,
+		unlock = M.UNLOCK,
 		icon = M.ICON,
 		icon_material = M.ICON_MATERIAL,
 		attributes = M.ATTRIBUTES,
@@ -151,7 +152,7 @@ end
 
 -- The weapon_info of a level from the Justice's numbers ({ firerate, power, power_crit, range,
 -- effect_hit, armorpiercing }). unstoppable is set false outright, rather than left out, so nothing of the
--- rail's is kept.
+-- game turret's is kept.
 function M.weapon(justice, level)
 	return {
 		automatic = true,
@@ -165,9 +166,8 @@ function M.weapon(justice, level)
 	}
 end
 
--- The Perforator's settings for a level (0 is Mk1) from the Railcannon Turret's base settings: the
--- Railcannon's own level (health, life, map icon, turn speed), with the Justice's weapon and the stream's
--- turret_info.
+-- The Perforator's settings for a level (0 is Mk1) from the Minigun Turret's base settings: the
+-- Minigun's own level (health, life, map icon), with the Justice's weapon and the stream's turret_info.
 function M.variant(rail, level, justice)
 	rail = raw(rail)
 	local v = copy(rail)
@@ -178,6 +178,7 @@ function M.variant(rail, level, justice)
 	v.weapon_info = M.weapon(justice, level)
 	if type(v.turret_info) ~= "table" then v.turret_info = {} end
 	for k, value in pairs(M.TURRET) do v.turret_info[k] = value end
+	v.turret_info.turn_speed_target = M.TURN[level + 1]
 	return v
 end
 
@@ -309,7 +310,7 @@ function R:install()
 end
 
 -- The lobby stopped being cleared: the game's table goes back to the game's levels. Turrets standing
--- keep the tables they hold and fire as before; one set up later is a plain Railcannon Turret.
+-- keep the tables they hold and fire as before; one set up later is a plain Minigun Turret.
 function R:uninstall()
 	local lsm = self:lsm()
 	local map = lsm and lsm.unit_path_to_modified_settings
@@ -330,7 +331,7 @@ function R:hellpod(setup)
 	local ok, err = pcall(function()
 		if type(setup) ~= "table" or type(setup.stratagem_info) ~= "table" or setup.stratagem_info.name ~= M.NAME then return end
 		if not self:install() then
-			self:log("the variants could not be installed; this one lands as a Railcannon Turret")
+			self:log("the variants could not be installed; this one lands as a Minigun Turret")
 			return
 		end
 		M.mark(setup)
