@@ -1,9 +1,10 @@
 -- What a SEAF soldier carries, by Mk. Pure: no game calls, so the tests run it as it is.
---   Mk1: the Liberator and the default pistol, no perk.
+--   Mk1: the game's default loadout: the Liberator, the default pistol and the default perk.
 --   Mk2: the same, one perk at random (Displacement Field or Heavy Armor) and one support weapon at random.
 --   Mk3: two soldiers per call, each with a Mk2 kit rolled separately.
 local M = {}
 
+-- What the game's default loadout gives (LoadoutSettings.default_loadout), which every soldier lands with.
 M.PRIMARY = "equipment/wep_assaultrifle_01"
 M.SIDEARM = "equipment/wep_pistol_01"
 -- perk_teleport_shield is the perk the game calls Displacement Field: the perk's setup enables the teleport

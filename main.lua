@@ -14,7 +14,7 @@ else
 	seaf_look = nil
 end
 
--- Soldiers need Obsidian API 1.41.0. With an older one the stratagem is still defined, so a saved loadout
+-- Soldiers need Obsidian API 1.42.0. With an older one the stratagem is still defined, so a saved loadout
 -- keeps it, and a call gives the use back and says why in the log.
 local bots_ready = api_info ~= nil and seaf_unit.at_least(api_info.version, seaf_unit.BOTS_API)
 local squad = bots_ready and seaf_squad.new(api, { look = seaf_look }) or nil

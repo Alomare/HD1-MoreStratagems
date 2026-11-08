@@ -24,11 +24,12 @@ test("a_mk3_call_brings_two_soldiers_with_a_mk2_kit_and_their_orders", function(
 	local a, b = m.bots[1], m.bots[2]
 	for _, bot in ipairs(m.bots) do
 		eq(bot.opts.guest, true, "a guest") eq(bot.opts.bare, true) eq(bot.opts.require_pad, true)
-		eq(bot.gear.primary_weapon, "equipment/wep_assaultrifle_01", "the Liberator")
-		eq(bot.gear.sidearm_weapon, "equipment/wep_pistol_01")
+		eq(bot.opts.loadout, "default", "the Liberator and the pistol of the game's default loadout")
+		eq(bot.gear.primary_weapon, nil, "nothing given over them, so nothing dropped")
+		eq(bot.gear.sidearm_weapon, nil)
 		yes(bot.gear.perk == "perk_teleport_shield" or bot.gear.perk == "perk_heavy_armor", "a perk")
 		yes(bot.gear.support_weapon == "equipment/wep_mg" or bot.gear.support_weapon == "equipment/wep_flame", "a support weapon, never the REP-80")
-		eq(bot.orders.fight[1], 25)
+		eq(bot.orders.fight[1], 25) eq(bot.orders.fight[2].weapon, "best", "the weapon for each target")
 		eq(type(bot.orders.follow[1]), "function") eq(bot.orders.follow[2], 6)
 		eq(bot.orders.ride_along[1], true) eq(bot.orders.auto_revive[1], 15)
 		eq(bot.orders.avoid_shots[2].melee, true, "close attacks too")
@@ -52,7 +53,7 @@ test("a_mk1_soldier_has_the_default_kit_and_follows_the_owner_else_the_nearest_p
 	local s = squad_on(m)
 	eq(s:call_in({ x = 40, y = 0, z = 0 }, 0, m.avatar), 1)
 	local bot = m.bots[1]
-	eq(bot.gear.perk, false, "no perk") eq(bot.gear.support_weapon, nil, "no support weapon")
+	eq(bot.gear.perk, nil, "the default perk kept") eq(bot.gear.support_weapon, nil, "no support weapon")
 	local follow = bot.orders.follow[1]
 	eq(follow(bot), m.avatar, "the owner, even with another player nearer")
 	m.avatar.dead = true

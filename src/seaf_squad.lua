@@ -177,7 +177,7 @@ end
 function S:spawn(k, pos, hp)
 	self.counter = self.counter + 1
 	local rec = { kit = k, hp = hp or 1, name = "SEAF " .. self.counter }
-	local opts = { bare = true, guest = true, require_pad = true, name = rec.name, position = pos, look = self:look(),
+	local opts = { bare = true, guest = true, require_pad = true, loadout = "default", name = rec.name, position = pos, look = self:look(),
 		on_death = function() self:died(rec) end }
 	local b, why = self.api.bots.add(opts)
 	if not b and why == "bad_value" then
@@ -194,18 +194,20 @@ function S:spawn(k, pos, hp)
 	return rec
 end
 
--- Gear and orders, once the body is there: the spawn is queued, so this waits for it.
+-- Gear and orders, once the body is there: the spawn is queued, so this waits for it. The body comes with
+-- the game's default loadout (add's loadout = "default"): the Liberator, the pistol and the default perk,
+-- which is the Mk1 kit. Mk2 adds a perk and a support weapon. The game takes out each weapon it is given
+-- (InventoryComponent "set_weapon"), so fight's "best" brings the right one back out: the Liberator, the
+-- support weapon where it hurts a target clearly more, the pistol once the Liberator has no ammunition.
 function S:prepare(rec)
 	if rec.ready or rec.dead then return end
 	local b = rec.bot
 	if not b:unit() then return end
 	rec.ready = true
-	b:give_weapon("primary_weapon", kit.PRIMARY)
-	b:give_weapon("sidearm_weapon", kit.SIDEARM)
-	if rec.kit.perk then b:give_perk(rec.kit.perk) else b:remove_perk() end
+	if rec.kit.perk then b:give_perk(rec.kit.perk) end
 	if rec.kit.weapon then b:give_weapon("support_weapon", rec.kit.weapon.unit_path) end
 	if rec.hp and rec.hp < 1 and rec.hp > 0 then b:set_health(rec.hp) end
-	b:fight(M.FIGHT)
+	b:fight(M.FIGHT, { weapon = "best" })
 	b:follow(function(bot) return self:follow_target(bot) end, M.FOLLOW)
 	b:ride_along(true)
 	b:auto_revive(M.REVIVE)
