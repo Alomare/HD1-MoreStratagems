@@ -34,6 +34,18 @@
       "data": "res/seaf_unit_icon.texture"
     },
     {
+      "type": "texture",
+      "name": "more_stratagems/perforator_turret_icon",
+      "bundle": "9cf71054ea26dddf",
+      "data": "res/perforator_turret_icon.texture"
+    },
+    {
+      "type": "texture",
+      "name": "more_stratagems/homing_payload_icon",
+      "bundle": "9cf71054ea26dddf",
+      "data": "res/homing_payload_icon.texture"
+    },
+    {
       "type": "material",
       "name": "more_stratagems/icons",
       "bundle": "9cf71054ea26dddf",

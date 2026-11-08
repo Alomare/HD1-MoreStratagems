@@ -4,7 +4,15 @@ local M = {}
 
 M.NAME = "stratagem_seaf_unit"
 M.TITLE = "SEAF Unit"
-M.DESCRIPTION = "Calls down a SEAF soldier who fights beside the squad, follows the thrower and helps fallen Helldivers up. Soldiers do not respawn."
+-- In the game's style: the upgrade texts replace this one in the menus, so each restates it with the
+-- change worked in (tools: internal/native-texts.md).
+local KIT = " Improved field kits equip each soldier with a support weapon and either a Displacement Field or Heavy Armor."
+local function text(count, soldier, follows, helps, collects, leaves)
+	return "Call down " .. count .. " of the Super Earth Armed Forces to fight beside the squad. The " .. soldier
+		.. " " .. follows .. " the Helldivers, " .. helps .. " up the fallen and " .. collects
+		.. " samples, but " .. leaves .. " the objectives to them. SEAF soldiers are NOT reinforced when they fall."
+end
+M.DESCRIPTION = text("a soldier", "soldier", "follows", "helps", "collects", "leaves")
 -- The game's stratagem the new one is copied from. Other players see this one on the wire.
 M.BASE = "stratagem_tesla_tower"
 M.TYPE = "supply"
@@ -19,8 +27,8 @@ M.COOLDOWN = 200
 M.CALL_IN = 15
 M.USES = 2
 M.UPGRADES = {
-	{ title = "SEAF Unit Mk2", description = "Each soldier carries one random perk, Displacement Field or Heavy Armor, and one random support weapon.", cost = 2 },
-	{ title = "SEAF Unit Mk3", description = "Each call brings two soldiers, each with a Mk2 kit of their own.", cost = 3 },
+	{ title = "SEAF Unit Mk2", description = M.DESCRIPTION .. KIT, cost = 2 },
+	{ title = "SEAF Unit Mk3", description = text("two soldiers", "soldiers", "follow", "help", "collect", "leave") .. KIT, cost = 3 },
 }
 -- The lowest Obsidian API version the stratagem is defined on, and the lowest one soldiers come with
 -- (guest bots on any machine, looks, deaths, pickups and the lobby calls of 1.41.0; the default loadout,

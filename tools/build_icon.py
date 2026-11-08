@@ -1,17 +1,21 @@
-"""Builds the Reinforce stratagem's icon from the installed game: the Reinforce icon recoloured to the blue of
-the regular supply stratagems, such as the Resupply.
+"""Builds the More Stratagems icons: the SEAF Unit's icon, recoloured from the installed game, and two icons
+from ready-made PNGs. All three share one material, res/icons.material.
 
 Usage: python tools/build_icon.py [path to Helldivers/contents]
 
-Writes res/icons.material and res/seaf_unit_icon.texture, both for the boot bundle (see "resources" in
-obsidian.json), and internal/seaf_unit_icon_preview.png to look at. Needs Pillow.
+Writes res/icons.material (three sub-materials, SEAF first), res/seaf_unit_icon.texture,
+res/homing_payload_icon.texture and res/perforator_turret_icon.texture, all for the boot bundle (see
+"resources" in obsidian.json). Also writes internal/icons_preview.png to look at, and
+internal/icons_manifest.json with the two new texture resource entries for obsidian.json. Needs Pillow.
 
-The icon is drawn like the game's own: an 80x80 uncompressed texture with two mips, in the Reinforce
-icon's header, and a material record copied from the Reinforce's in hud/hud, so the Loadout screen's clip
-variables and the HUD's shader are the same. Only its name and texture differ.
+The icons are drawn like the game's own: 80x80 uncompressed textures with the mips and header of the Reinforce
+icon, and material records copied from the Reinforce's in hud/hud, so the Loadout screen's clip variables and
+the HUD's shader are the same. Only each record's name and texture differ. The material's layout is a version
+(10), a count, then 13-word records, the same as hud/hud's.
 """
 import colorsys
 import io
+import json
 import struct
 import sys
 import zlib
@@ -24,6 +28,7 @@ ROOT = Path(__file__).resolve().parent.parent
 RES, INTERNAL = ROOT / "res", ROOT / "internal"
 CONTENTS = Path(sys.argv[1]) if len(sys.argv) > 1 else Path(r"C:\Program Files (x86)\Steam\steamapps\common\Helldivers\contents")
 COMMON = "95b2365a6369ee36"  # resource_packages/common, which holds hud/hud
+BUNDLE = "9cf71054ea26dddf"  # the boot bundle obsidian.json loads these into
 
 # Keep in step with the Lua that loads these names.
 ICON = "seaf_unit_icon"
@@ -36,9 +41,22 @@ SOURCE = "stratagem_reinforcements"
 # The blue stratagem whose icon's blue the Reinforce icon takes.
 REFERENCE = "stratagem_resupply"
 
+# The icons drawn from PNGs, after the SEAF's in the material: (icon name, texture name, PNG).
+PNG_ICONS = [
+    ("homing_payload_icon", "more_stratagems/homing_payload_icon", Path(r"C:\Users\vps26\Downloads\homingpayload.png")),
+    ("perforator_turret_icon", "more_stratagems/perforator_turret_icon", Path(r"C:\Users\vps26\Downloads\penetratorturret.png")),
+]
+
+# Vanilla icons for the preview, by their texture's name hash, both on a coloured background box like the
+# stratagem tiles: a red-brown offensive one (stratagem_missile_strike, hud/hud record 075a50e5) and an olive
+# green one (hud/hud record 7b8ab5ca, its stratagem name not known here).
+PREVIEW_RED = 0xcde05b6f3c278e3e
+PREVIEW_GREEN = 0x8eb0c6e73be4bc22
+
 MATERIAL_VERSION = 10
 DIFFUSE_MAP = 0x3aa8b87e
 RECORD_WORDS = 13
+ICON_SIZE = (80, 80)
 
 
 def murmur64(data, seed=0):
@@ -87,7 +105,8 @@ def bundle_entries(path):
 
 
 def game_icons():
-    """hud/hud's records for the Reinforce and the blue reference stratagem, and their textures' raw bytes."""
+    """hud/hud's records for the Reinforce and the blue reference stratagem, their textures' raw bytes, and every
+    texture in the common bundle by name hash."""
     material, texture = murmur64(b"material"), murmur64(b"texture")
     hud = murmur64(b"hud/hud")
     entries = list(bundle_entries(CONTENTS / COMMON))
@@ -102,7 +121,7 @@ def game_icons():
         records[name] = record
     textures = {n: d for k, n, d in entries if k == texture}
     tex = {name: textures[r[6] | (r[7] << 32)] for name, r in records.items()}
-    return records, tex
+    return records, tex, textures
 
 
 def sample_tone(image, low, high):
@@ -162,6 +181,14 @@ def recolour(icon, reference):
     return out
 
 
+def load_png(path):
+    """A PNG as an 80x80 RGBA icon, resized with Lanczos. The colours are kept as given. The resize runs on
+    premultiplied alpha, so transparent pixels don't bleed their colour into the edges."""
+    image = Image.open(path)
+    print(f"{path.name}: original size {image.size[0]}x{image.size[1]}, mode {image.mode}")
+    return image.convert("RGBa").resize(ICON_SIZE, Image.Resampling.LANCZOS).convert("RGBA")
+
+
 def texture(header_from, image):
     """The game's layout: the Reinforce texture's DDS header, BGRA mips, and its four byte tail."""
     height, width = struct.unpack_from("<II", header_from, 12)
@@ -181,30 +208,79 @@ def texture(header_from, image):
     return header_from[:128] + body + header_from[-4:]
 
 
-def material(source_record):
-    tex = murmur64(TEXTURE.encode())
-    record = list(source_record)
-    record[0] = murmur64(ICON.encode()) >> 32
-    record[6], record[7] = tex & 0xffffffff, tex >> 32
-    return struct.pack("<II", MATERIAL_VERSION, 1) + struct.pack("<%dI" % RECORD_WORDS, *record)
+def material(entries, source_record):
+    """The material file: version, count, then one record per (icon name, texture name), each a copy of the
+    Reinforce's record with its name and texture changed."""
+    body = b""
+    for icon, texture_name in entries:
+        tex = murmur64(texture_name.encode())
+        record = list(source_record)
+        record[0] = murmur64(icon.encode()) >> 32
+        record[6], record[7] = tex & 0xffffffff, tex >> 32
+        body += struct.pack("<%dI" % RECORD_WORDS, *record)
+    return struct.pack("<II", MATERIAL_VERSION, len(entries)) + body
+
+
+def check_material(data, entries):
+    """Reads the material back and checks its count and each record's sub-material and texture name hashes
+    against the names it should hold."""
+    version, count = struct.unpack_from("<II", data, 0)
+    if version != MATERIAL_VERSION or count != len(entries) or len(data) != 8 + count * RECORD_WORDS * 4:
+        raise SystemExit(f"icons.material: version {version}, count {count}, {len(data)} bytes; expected {len(entries)} records")
+    for i, (icon, texture_name) in enumerate(entries):
+        words = struct.unpack_from("<%dI" % RECORD_WORDS, data, 8 + i * RECORD_WORDS * 4)
+        if words[0] != murmur64(icon.encode()) >> 32:
+            raise SystemExit(f"icons.material record {i}: sub-material name does not hash to {icon}")
+        if words[6] | (words[7] << 32) != murmur64(texture_name.encode()):
+            raise SystemExit(f"icons.material record {i}: texture name does not hash to {texture_name}")
+        print(f"record {i}: {icon} -> {texture_name}, hashes match")
+
+
+def preview(tiles, scale=3, gap=16, split=32):
+    """The icons side by side, with a wider gap before the vanilla ones (the last two)."""
+    w, h = ICON_SIZE[0] * scale, ICON_SIZE[1] * scale
+    width = len(tiles) * w + (len(tiles) - 1) * gap + (split - gap)
+    sheet = Image.new("RGBA", (width, h), (30, 30, 30, 255))
+    x = 0
+    for i, tile in enumerate(tiles):
+        if i == len(tiles) - 2:
+            x += split - gap
+        sheet.paste(tile.resize((w, h), Image.Resampling.NEAREST), (x, 0))
+        x += w + gap
+    return sheet
 
 
 def main():
-    records, tex = game_icons()
+    records, tex, textures = game_icons()
+    source_record = records[SOURCE]
     source = Image.open(io.BytesIO(tex[SOURCE])).convert("RGBA")
     reference = Image.open(io.BytesIO(tex[REFERENCE])).convert("RGBA")
-    icon = recolour(source, reference)
+    seaf = recolour(source, reference)
     RES.mkdir(exist_ok=True)
     INTERNAL.mkdir(exist_ok=True)
-    (RES / "seaf_unit_icon.texture").write_bytes(texture(tex[SOURCE], icon))
-    (RES / "icons.material").write_bytes(material(records[SOURCE]))
-    w, h = icon.size
-    preview = Image.new("RGBA", (w * 12 + 32, h * 4), (30, 30, 30, 255))
-    preview.paste(source.resize((w * 4, h * 4), Image.Resampling.NEAREST), (0, 0))
-    preview.paste(icon.resize((w * 4, h * 4), Image.Resampling.NEAREST), (w * 4 + 16, 0))
-    preview.paste(reference.resize((w * 4, h * 4), Image.Resampling.NEAREST), (w * 8 + 32, 0))
-    preview.save(INTERNAL / "seaf_unit_icon_preview.png")
-    print("wrote", RES / "seaf_unit_icon.texture", RES / "icons.material")
+
+    # The SEAF's texture is written from the Reinforce's header, as before.
+    (RES / f"{ICON}.texture").write_bytes(texture(tex[SOURCE], seaf))
+    tiles = [seaf]
+    entries = [(ICON, TEXTURE)]
+    new = []
+    for icon, texture_name, path in PNG_ICONS:
+        image = load_png(path)
+        (RES / f"{icon}.texture").write_bytes(texture(tex[SOURCE], image))
+        tiles.append(image)
+        entries.append((icon, texture_name))
+        new.append({"type": "texture", "name": texture_name, "bundle": BUNDLE, "data": f"res/{icon}.texture"})
+
+    data = material(entries, source_record)
+    check_material(data, entries)
+    (RES / "icons.material").write_bytes(data)
+
+    # Vanilla red (offensive) and green (defensive) icons, for comparing colours.
+    tiles.append(Image.open(io.BytesIO(textures[PREVIEW_RED])).convert("RGBA"))
+    tiles.append(Image.open(io.BytesIO(textures[PREVIEW_GREEN])).convert("RGBA"))
+    preview(tiles).save(INTERNAL / "icons_preview.png")
+    (INTERNAL / "icons_manifest.json").write_text(json.dumps(new, indent=2) + "\n", encoding="utf-8")
+    print("wrote", RES / "icons.material", ", ".join(f"res/{i}.texture" for i, _ in entries))
 
 
 if __name__ == "__main__":
