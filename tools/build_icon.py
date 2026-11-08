@@ -47,11 +47,12 @@ PNG_ICONS = [
     ("perforator_turret_icon", "more_stratagems/perforator_turret_icon", Path(r"C:\Users\vps26\Downloads\penetratorturret.png")),
 ]
 
-# Vanilla icons for the preview, by their texture's name hash, both on a coloured background box like the
-# stratagem tiles: a red-brown offensive one (stratagem_missile_strike, hud/hud record 075a50e5) and an olive
-# green one (hud/hud record 7b8ab5ca, its stratagem name not known here).
-PREVIEW_RED = 0xcde05b6f3c278e3e
-PREVIEW_GREEN = 0x8eb0c6e73be4bc22
+# Vanilla icons, by their texture's name hash, both on a coloured background box like the stratagem tiles: a
+# red-brown offensive one (stratagem_missile_strike, hud/hud record 075a50e5) and an olive green one (hud/hud
+# record 7b8ab5ca, stratagem name not known here). Each one's edge ring, a single colour, is the edge the
+# PNG icons of the same colour family take.
+VANILLA_RED = 0xcde05b6f3c278e3e
+VANILLA_GREEN = 0x8eb0c6e73be4bc22
 
 MATERIAL_VERSION = 10
 DIFFUSE_MAP = 0x3aa8b87e
@@ -136,15 +137,15 @@ def sample_tone(image, low, high):
     return counts.most_common(1)[0][0]
 
 
-# The Reinforce's own tones, by value (max channel / 255): its outline (150, 110, 40) at 0.59, its gold
-# background (200, 160, 75) at 0.78, its back figures' shade (243, 201, 124) at 0.95 and its front
+# The Reinforce's own tones, by value (max channel / 255): the outline (150, 110, 40) at 0.59, the gold
+# background (200, 160, 75) at 0.78, the back figures' shade (243, 201, 124) at 0.95 and the front
 # figure's cream (255, 235, 207) at 1.0.
 SOURCE_TONES = [0.59, 0.78, 0.95, 1.0]
 
 
 def recolour(icon, reference):
-    """Maps the Reinforce's tones onto the Resupply's: outline to its edge, gold background to its teal,
-    and the cream figures to its bullets' grey-blue, the front one brightest. Near-white stays white."""
+    """Maps the Reinforce's tones onto the Resupply's: outline to the edge, gold background to the teal,
+    and the cream figures to the bullets' grey-blue, the front one brightest. Near-white stays white."""
     edge = sample_tone(reference, 0.0, 0.25)
     background = sample_tone(reference, 0.3, 0.5)
     shade = sample_tone(reference, 0.5, 0.65)
@@ -181,16 +182,45 @@ def recolour(icon, reference):
     return out
 
 
-def load_png(path):
-    """A PNG as an 80x80 RGBA icon, resized with Lanczos. The colours are kept as given. The resize runs on
-    premultiplied alpha, so transparent pixels don't bleed their colour into the edges."""
-    image = Image.open(path)
-    print(f"{path.name}: original size {image.size[0]}x{image.size[1]}, mode {image.mode}")
-    return image.convert("RGBa").resize(ICON_SIZE, Image.Resampling.LANCZOS).convert("RGBA")
+def colour_family(colour):
+    """red or green, by the hue of a stratagem tile's background colour."""
+    hue = colorsys.rgb_to_hsv(*(c / 255 for c in colour[:3]))[0] * 360
+    return "red" if hue < 40 or hue > 340 else "green"
+
+
+def vanilla_edge(data):
+    """The edge ring colour of a vanilla icon: the most common colour along the outer pixels."""
+    image = Image.open(io.BytesIO(data)).convert("RGBA")
+    w, h = image.size
+    ring = Counter(image.getpixel((x, y)) for x in range(w) for y in range(h) if x in (0, w - 1) or y in (0, h - 1))
+    return ring.most_common(1)[0][0][:3]
+
+
+def load_png(path, edges):
+    """A PNG as an 80x80 RGBA icon. The transparent margin is cropped off, so the coloured tile fills the icon.
+    The tile is resized with Lanczos on premultiplied alpha, so transparent pixels don't bleed colour into the
+    edges. The colours are kept as given, except the outer ring, which takes the edge colour of the vanilla icons
+    of the tile's colour family (red or green)."""
+    image = Image.open(path).convert("RGBA")
+    print(f"{path.name}: original size {image.size[0]}x{image.size[1]}")
+    box = image.getchannel("A").point(lambda a: 255 if a > 128 else 0).getbbox()
+    tile = image.crop(box)
+    print(f"  tile {tile.size[0]}x{tile.size[1]} at {box}")
+    family = colour_family(Counter(tile.getdata()).most_common(1)[0][0])
+    icon = tile.convert("RGBa").resize(ICON_SIZE, Image.Resampling.LANCZOS).convert("RGBA")
+    edge = edges[family]
+    print(f"  {family} family, edge {edge}")
+    w, h = icon.size
+    po = icon.load()
+    for y in range(h):
+        for x in range(w):
+            if x in (0, w - 1) or y in (0, h - 1):
+                po[x, y] = (*edge, po[x, y][3])
+    return icon
 
 
 def texture(header_from, image):
-    """The game's layout: the Reinforce texture's DDS header, BGRA mips, and its four byte tail."""
+    """The game's layout: the Reinforce texture's DDS header, BGRA mips, and the four byte tail."""
     height, width = struct.unpack_from("<II", header_from, 12)
     mips = struct.unpack_from("<I", header_from, 28)[0]
     fourcc, bits = header_from[84:88], struct.unpack_from("<I", header_from, 88)[0]
@@ -210,7 +240,7 @@ def texture(header_from, image):
 
 def material(entries, source_record):
     """The material file: version, count, then one record per (icon name, texture name), each a copy of the
-    Reinforce's record with its name and texture changed."""
+    Reinforce's record with the name and texture changed."""
     body = b""
     for icon, texture_name in entries:
         tex = murmur64(texture_name.encode())
@@ -222,7 +252,7 @@ def material(entries, source_record):
 
 
 def check_material(data, entries):
-    """Reads the material back and checks its count and each record's sub-material and texture name hashes
+    """Reads the material back and checks the count and each record's sub-material and texture name hashes
     against the names it should hold."""
     version, count = struct.unpack_from("<II", data, 0)
     if version != MATERIAL_VERSION or count != len(entries) or len(data) != 8 + count * RECORD_WORDS * 4:
@@ -264,8 +294,9 @@ def main():
     tiles = [seaf]
     entries = [(ICON, TEXTURE)]
     new = []
+    edges = {"red": vanilla_edge(textures[VANILLA_RED]), "green": vanilla_edge(textures[VANILLA_GREEN])}
     for icon, texture_name, path in PNG_ICONS:
-        image = load_png(path)
+        image = load_png(path, edges)
         (RES / f"{icon}.texture").write_bytes(texture(tex[SOURCE], image))
         tiles.append(image)
         entries.append((icon, texture_name))
@@ -276,8 +307,8 @@ def main():
     (RES / "icons.material").write_bytes(data)
 
     # Vanilla red (offensive) and green (defensive) icons, for comparing colours.
-    tiles.append(Image.open(io.BytesIO(textures[PREVIEW_RED])).convert("RGBA"))
-    tiles.append(Image.open(io.BytesIO(textures[PREVIEW_GREEN])).convert("RGBA"))
+    tiles.append(Image.open(io.BytesIO(textures[VANILLA_RED])).convert("RGBA"))
+    tiles.append(Image.open(io.BytesIO(textures[VANILLA_GREEN])).convert("RGBA"))
     preview(tiles).save(INTERNAL / "icons_preview.png")
     (INTERNAL / "icons_manifest.json").write_text(json.dumps(new, indent=2) + "\n", encoding="utf-8")
     print("wrote", RES / "icons.material", ", ".join(f"res/{i}.texture" for i, _ in entries))
