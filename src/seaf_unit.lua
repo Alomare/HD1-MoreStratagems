@@ -1,0 +1,71 @@
+-- The SEAF Unit's entry for api.stratagems.define. A beacon calls down SEAF soldiers who fight beside the
+-- squad (seaf_squad); the Tesla Tower it is copied from never lands.
+local M = {}
+
+M.NAME = "stratagem_seaf_unit"
+M.TITLE = "SEAF Unit"
+M.DESCRIPTION = "Calls down a SEAF soldier who fights beside the squad, follows the thrower and helps fallen Helldivers up. Soldiers do not respawn."
+-- The game's stratagem the new one is copied from. Other players see this one on the wire.
+M.BASE = "stratagem_tesla_tower"
+M.TYPE = "supply"
+-- Offered from rank 5 on, as the game offers the other stratagems by rank.
+M.UNLOCK = { rank = 5 }
+M.ICON = "more_stratagems/seaf_unit_icon"
+M.ICON_MATERIAL = "more_stratagems/icons"
+-- Seconds of cooldown, seconds from call-in to the stratagem landing, and uses per mission.
+M.COOLDOWN = 200
+M.CALL_IN = 15
+M.USES = 2
+M.UPGRADES = {
+	{ title = "SEAF Unit Mk2", description = "Each soldier carries one random perk, Displacement Field or Heavy Armor, and one random support weapon.", cost = 2 },
+	{ title = "SEAF Unit Mk3", description = "Each call brings two soldiers, each with a Mk2 kit of their own.", cost = 3 },
+}
+-- The lowest Obsidian API version the stratagem is defined on, and the lowest one soldiers come with
+-- (guest bots on any machine, looks, deaths, pickups and the lobby calls of 1.41.0).
+M.MIN_API = { 1, 12, 0 }
+M.BOTS_API = { 1, 41, 0 }
+
+-- Whether a version string such as "1.22.0" is at least the list given.
+function M.at_least(version, want)
+	local got = {}
+	for n in tostring(version or ""):gmatch("%d+") do got[#got + 1] = tonumber(n) end
+	for i, w in ipairs(want) do
+		local v = got[i] or 0
+		if v ~= w then return v > w end
+	end
+	return true
+end
+
+-- call_in(pos, upgrade, owner): what a landed beacon does, with pos as plain numbers. nil when soldiers
+-- can't come (an Obsidian API older than BOTS_API): refused(owner) runs instead. Either way, no tower.
+function M.def(call_in, refused)
+	local upgrades = {}
+	for i, u in ipairs(M.UPGRADES) do upgrades[i] = { title = u.title, description = u.description, cost = u.cost } end
+	return {
+		name = M.NAME,
+		base = M.BASE,
+		title = M.TITLE,
+		description = M.DESCRIPTION,
+		type = M.TYPE,
+		unlock = M.UNLOCK,
+		icon = M.ICON,
+		icon_material = M.ICON_MATERIAL,
+		stats = { cooldown_time = M.COOLDOWN, activation_time = M.CALL_IN, num_uses = M.USES },
+		upgrades = upgrades,
+		-- The position is the game's vector, good for this frame only: copied to plain numbers.
+		on_activate = function(ctx)
+			local p = ctx.position
+			local ok, err = pcall(function()
+				if call_in then
+					call_in({ x = p.x, y = p.y, z = p.z }, ctx.upgrade, ctx.owner)
+				elseif refused then
+					refused(ctx.owner)
+				end
+			end)
+			if not ok and obsidian and obsidian.log then obsidian.log("SEAF Unit: " .. tostring(err)) end
+			return false
+		end,
+	}
+end
+
+return M

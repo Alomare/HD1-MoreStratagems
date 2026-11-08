@@ -1,164 +1,164 @@
-local levels = obsidian.module("src/repair_levels")
-local targets = obsidian.module("src/repair_targets")
-local share = obsidian.module("src/repair_share")
-local tower = obsidian.module("src/repair_tower")
+-- The pure parts of the SEAF Unit: kits, the shared registry, the heir and the rules.
+local kit = obsidian.module("src/seaf_kit")
+local registry = obsidian.module("src/seaf_registry")
+local heir = obsidian.module("src/seaf_heir")
+local rules = obsidian.module("src/seaf_rules")
 
 local T = {}
 local function test(name, fn) T[#T + 1] = { name, fn } end
 
-local function c(unit, x, hp, kind, extra)
-	local out = { unit = unit, kind = kind or "helldiver", x = x, y = 0, z = 0, hp = hp, max = kind == "machine" and 1000 or 100,
-		floor = kind == "machine" and -500 or -100, dead = false }
-	for k, v in pairs(extra or {}) do out[k] = v end
-	return out
+local WEAPONS = { { name = "stratagem_machinegun", unit_path = "equipment/wep_mg" }, { name = "stratagem_flamethrower", unit_path = "equipment/wep_flame" } }
+
+local function seq(...)
+	local list, i = { ... }, 0
+	return function(n)
+		i = i + 1
+		local v = list[(i - 1) % #list + 1]
+		assert(v >= 1 and v <= n, "rng answer in range")
+		return v
+	end
 end
-local TOWER = { unit = "tower", x = 0, y = 0, z = 0 }
 
-test("each_mk_is_a_step_up_from_the_one_before", function()
-	local mk1, mk2, mk3 = levels.LEVELS[0], levels.LEVELS[1], levels.LEVELS[2]
-	eq(mk1.mk, 1) eq(mk2.mk, 2) eq(mk3.mk, 3)
-	-- Mk2: reach and beams.
-	yes(mk2.range > mk1.range, "Mk2 reaches further") yes(mk2.beams > mk1.beams, "Mk2 has more beams")
-	eq(mk2.helldiver, mk1.helldiver, "Mk2 heal rate") eq(mk2.revive, false, "Mk2 revive")
-	-- Mk3: heal rate and reviving, the rest kept.
-	eq(mk3.helldiver, 2 * mk2.helldiver, "Mk3 heals Helldivers twice as fast") eq(mk3.machine, 2 * mk2.machine, "and machines")
-	eq(mk3.revive, true, "Mk3 revives") eq(mk3.range, mk2.range) eq(mk3.beams, mk2.beams)
-	-- The README and the upgrade texts name these numbers.
-	eq(mk1.range, 8) eq(mk2.range, 12) eq(mk1.beams, 1) eq(mk2.beams, 3)
-	eq(mk1.helldiver, 10) eq(mk1.machine, 50) eq(mk3.helldiver, 20) eq(mk3.machine, 100)
+test("kit_counts_and_mk_from_the_upgrade_level", function()
+	eq(kit.mk(0), 1) eq(kit.mk(1), 2) eq(kit.mk(2), 3) eq(kit.mk(7), 3, "no Mk4") eq(kit.mk(nil), 1) eq(kit.mk(-1), 1)
+	eq(kit.count(1), 1) eq(kit.count(2), 1) eq(kit.count(3), 2)
 end)
 
-test("the_level_comes_from_the_upgrade_value_and_stops_at_mk3", function()
-	eq(levels.of(0).mk, 1) eq(levels.of(1).mk, 2) eq(levels.of(2).mk, 3)
-	eq(levels.of(nil).mk, 1, "no value") eq(levels.of(-3).mk, 1, "below") eq(levels.of(9).mk, 3, "past Mk3")
-	eq(select(2, levels.of(15)), 2) eq(select(2, levels.of(0 / 0)), 0, "NaN")
-	-- One upgrade level per Mk past the first, as many as the Tesla Tower's unit has (two).
-	eq(#tower.UPGRADES, levels.MAX)
+test("kit_roll_is_a_function_of_the_rng", function()
+	local perks = kit.perks()
+	eq(#perks, 2)
+	local a = kit.roll(2, seq(2, 1), perks, WEAPONS)
+	local b = kit.roll(2, seq(2, 1), perks, WEAPONS)
+	eq(a.perk, "perk_heavy_armor") eq(a.weapon.name, "stratagem_machinegun")
+	eq(b.perk, a.perk) eq(b.weapon, a.weapon, "the same answers, the same kit")
+	local one = kit.roll(1, seq(1), perks, WEAPONS)
+	eq(one.perk, nil, "Mk1 carries no perk") eq(one.weapon, nil, "and no support weapon")
+	eq(kit.roll(3, seq(1, 2), perks, WEAPONS).weapon.name, "stratagem_flamethrower", "Mk3 rolls a Mk2 kit")
 end)
 
-test("heals_are_whole_hitpoints_at_the_mk_rate", function()
-	eq(levels.TICK, 0.5)
-	eq(levels.amount(levels.LEVELS[0], "helldiver"), 5) eq(levels.amount(levels.LEVELS[0], "machine"), 25)
-	eq(levels.amount(levels.LEVELS[2], "helldiver"), 10) eq(levels.amount(levels.LEVELS[2], "machine"), 50)
-	for n = 0, 2 do
-		for _, kind in ipairs({ "helldiver", "machine" }) do
-			local a = levels.amount(levels.LEVELS[n], kind)
-			eq(a, math.floor(a), "a whole number") yes(a >= 1 and a <= 32767, "fits an int16")
-		end
+test("a_perk_the_player_cant_use_falls_back_to_the_other", function()
+	local perks = kit.perks(function(name) return name ~= "perk_teleport_shield" end)
+	eq(#perks, 1) eq(perks[1], "perk_heavy_armor")
+	eq(kit.roll(2, seq(1), perks, WEAPONS).perk, "perk_heavy_armor")
+	eq(#kit.perks(function() return false end), 0)
+	eq(kit.roll(2, seq(1), {}, WEAPONS).perk, nil, "none usable, none carried")
+end)
+
+test("bots_get_no_repair_tool_and_an_inherited_kit_keeps_what_it_can", function()
+	local list = kit.weapons({ WEAPONS[1], { name = "stratagem_repairtool", unit_path = "equipment/wep_repairtool_01" }, { name = 5 } })
+	eq(#list, 1) eq(list[1].name, "stratagem_machinegun")
+	local k = kit.inherit(2, "perk_teleport_shield", "stratagem_flamethrower", seq(1), kit.perks(), WEAPONS)
+	eq(k.perk, "perk_teleport_shield") eq(k.weapon.name, "stratagem_flamethrower")
+	local swapped = kit.inherit(2, "perk_teleport_shield", "stratagem_dlc_gun", seq(1, 2), { "perk_heavy_armor" }, WEAPONS)
+	eq(swapped.perk, "perk_heavy_armor", "a perk this player can't use is swapped")
+	eq(swapped.weapon.name, "stratagem_flamethrower", "and so is a weapon this player doesn't own")
+	eq(kit.inherit(2, nil, nil, seq(1), kit.perks(), WEAPONS).weapon, nil, "no weapon stays none")
+	eq(kit.inherit(1, "perk_heavy_armor", "stratagem_machinegun", seq(1), kit.perks(), WEAPONS).perk, nil, "Mk1 keeps nothing")
+end)
+
+test("registry_round_trip", function()
+	local text = registry.encode({ seed = 77, free = 2, bots = { { id = 301, mk = 2, perk = "t", weapon = 14, hp = 80.4 }, { id = 302, mk = 1, hp = 100 } } })
+	eq(text, "1|77|2|301.2.t.14.80,302.1.-.0.100|")
+	local s = registry.decode(text, 77)
+	eq(s.free, 2) eq(#s.bots, 2)
+	eq(s.bots[1].id, 301) eq(s.bots[1].mk, 2) eq(s.bots[1].perk, "t") eq(s.bots[1].weapon, 14) eq(s.bots[1].hp, 80)
+	eq(s.bots[2].perk, nil) eq(s.bots[2].weapon, 0)
+	eq(s.claim, nil)
+	local claimed = registry.decode(registry.encode({ seed = 77, free = 0, bots = {}, claim = { peer = "abc123", count = 3 } }), 77)
+	eq(claimed.claim.peer, "abc123") eq(claimed.claim.count, 3) eq(#claimed.bots, 0)
+end)
+
+test("a_registry_of_another_mission_or_bad_text_is_not_read", function()
+	local text = registry.encode({ seed = 77, free = 1, bots = { { id = 1, mk = 1, hp = 50 } } })
+	eq(registry.decode(text, 78), nil, "another seed")
+	for _, bad in ipairs({ "", "junk", "2|77|1||", "1|77|1|1.4.-.0.50|", "1|77|1|x|", "1|77|1||peer", nil, 5 }) do
+		eq(registry.decode(bad, 77), nil, "bad text " .. tostring(bad))
 	end
 end)
 
-test("conditions_follow_the_health_component", function()
-	eq(targets.condition(c("a", 0, 100)), "full")
-	eq(targets.condition(c("a", 0, 99)), "hurt")
-	eq(targets.condition(c("a", 0, 0)), "downed", "0 is downed")
-	eq(targets.condition(c("a", 0, -99)), "downed")
-	eq(targets.condition(c("a", 0, -100)), "dead", "at the constitution")
-	eq(targets.condition(c("a", 0, 50, nil, { dead = true })), "dead")
-end)
-
-test("only_hurt_targets_in_range_get_a_beam", function()
-	local mk1 = levels.LEVELS[0]
-	local list = { c("full", 2, 100), c("far", 9, 10), c("hurt", 7.9, 60), c("edge", 8, 70) }
-	local got = targets.pick(TOWER, list, mk1)
-	eq(#got, 1) eq(got[1].unit, "hurt", "most hurt in range")
-	local mk2 = levels.LEVELS[1]
-	got = targets.pick(TOWER, list, mk2)
-	eq(#got, 3, "Mk2: three beams") eq(got[1].unit, "far", "10 hp first") eq(got[2].unit, "hurt") eq(got[3].unit, "edge")
-	-- Height counts as distance too.
-	got = targets.pick(TOWER, { c("up", 0, 50, nil, { z = 8.5 }) }, mk1)
-	eq(#got, 0, "8.5 m up is out of an 8 m range")
-end)
-
-test("the_tower_never_heals_itself", function()
-	local got = targets.pick(TOWER, { c("tower", 0, 10, "machine"), c("mech", 3, 900, "machine") }, levels.LEVELS[1])
-	eq(#got, 1) eq(got[1].unit, "mech")
-end)
-
-test("downed_targets_wait_for_mk3_and_then_go_first", function()
-	local list = { c("hurt", 3, 20), c("downed", 5, -40), c("burning", 6, -100, "machine"), c("dead", 1, -100) }
-	for n = 0, 1 do
-		local got = targets.pick(TOWER, list, levels.LEVELS[n])
-		eq(#got, 1, "Mk" .. (n + 1) .. " heals only the hurt one") eq(got[1].unit, "hurt")
-	end
-	local got = targets.pick(TOWER, list, levels.LEVELS[2])
-	eq(#got, 3)
-	eq(got[1].unit, "downed", "the downed Helldiver first") eq(got[2].unit, "burning", "then the burning vehicle")
-	eq(got[3].unit, "hurt")
-end)
-
-test("ties_go_to_the_nearest_then_to_the_list_order", function()
-	local got = targets.pick(TOWER, { c("b", 6, 50), c("a", 4, 50), c("c", 4, 50) }, levels.LEVELS[1])
-	eq(got[1].unit, "a") eq(got[2].unit, "c") eq(got[3].unit, "b")
-	-- The share of health decides between a Helldiver and a vehicle.
-	got = targets.pick(TOWER, { c("diver", 2, 90), c("mech", 3, 500, "machine") }, levels.LEVELS[0])
-	eq(got[1].unit, "mech", "50% before 90%")
-end)
-
-test("the_shared_text_reads_back_and_fits_the_lobby", function()
-	eq(share.encode({}), "")
-	local text = share.encode({ { id = 300, level = 2 }, { id = 12, level = 0 } })
-	eq(text, "12:0,300:2", "sorted")
-	local back = share.decode(text)
-	eq(#back, 2) eq(back[1].id, 12) eq(back[1].level, 0) eq(back[2].id, 300) eq(back[2].level, 2)
+test("eight_bots_and_a_claim_fit_the_lobby_limit", function()
+	local bots = {}
+	for i = 1, 8 do bots[i] = { id = 65000 + i, mk = 3, perk = "h", weapon = 999, hp = 100 } end
+	local text = registry.encode({ seed = 4294967295, free = 4, bots = bots, claim = { peer = "76561198000000000", count = 8 } })
+	yes(text, "encoded")
+	yes(#text <= 200, "under 200: " .. #text)
 	local many = {}
-	for i = 1, 60 do many[i] = { id = 60000 + i, level = 1 } end
-	text = share.encode(many)
-	yes(#text <= share.MAX, "at most 200 characters, got " .. #text)
-	eq(#share.decode(text), 25, "whole entries only")
-	eq(#share.decode("x,12:,:3,7:1"), 1, "junk skipped") eq(#share.decode(nil), 0)
+	for i = 1, 20 do many[i] = { id = 65000 + i, mk = 3, perk = "h", weapon = 999, hp = 100 } end
+	local none, why = registry.encode({ seed = 1, free = 1, bots = many })
+	eq(none, nil) eq(why, "too_long")
 end)
 
--- Every arrow code of the game's 55 stratagems (lua/settings/loadout_settings.lua).
-local GAME_CODES = {
-	"DLDUUR", "RUDRL", "DUDDR", "DRDLLR", "DRDLUD", "RDUULD", "RDUUD", "LRDDR", "DRDLLU", "DLDRR", "RRDL", "LDR", "RRR",
-	"DULURD", "DULLRD", "UDRU", "DRULDD", "DRULDL", "DRULDR", "DLDRL", "DLULD", "ULRDUD", "DUUDU", "DLDUL", "DLRUD",
-	"DLDUR", "DLDUUL", "LLUURL", "DDRU", "LRDU", "LRUD", "RDDDLD", "DLUDR", "RLRLDDR", "DLULL", "RULR", "RULURL",
-	"RULUDR", "DULRLD", "RDUDL", "DLRRL", "UDRLU", "DDLRD", "DDUR", "DLRUU", "DULRLR", "RULD", "RRU", "RRDU", "DRDLUR",
-	"LDDURL", "LDURL", "LDURRD", "LDULR", "LUR",
-}
-
-test("the_code_clashes_with_no_game_stratagem", function()
-	local letters = { left = "L", right = "R", up = "U", down = "D" }
-	local mine = ""
-	for _, arrow in ipairs(tower.CODE) do mine = mine .. assert(letters[arrow], arrow) end
-	eq(#GAME_CODES, 55)
-	for _, code in ipairs(GAME_CODES) do
-		yes(code ~= mine, "the same code as " .. code)
-		-- The game calls the stratagem whose code the arrows match, and reports codes that start another.
-		yes(mine:sub(1, #code) ~= code, code .. " starts the Repair Tower's code")
-		yes(code:sub(1, #mine) ~= mine, "the Repair Tower's code starts " .. code)
+test("every_machine_picks_the_same_heir_from_shuffled_lists", function()
+	local list = { { peer = "p3", free = 4 }, { peer = "p1", free = 4 }, { peer = "p2", free = 4 } }
+	local shuffled = { list[2], list[3], list[1] }
+	for seed = 1, 30 do
+		eq(heir.pick("leaver", list, 1, seed), heir.pick("leaver", shuffled, 1, seed), "seed " .. seed)
 	end
-	yes(#tower.CODE >= 1 and #tower.CODE <= 10, "1 to 10 arrows")
+	local seen = {}
+	for seed = 1, 60 do seen[heir.pick("leaver", list, 1, seed)] = true end
+	yes(seen.p1 and seen.p2 and seen.p3, "spread over the machines")
+	eq(heir.hash("abc"), heir.hash("abc"))
 end)
 
--- LoadoutSettings.ATTRIBUTE_SORT_ORDER: an attribute outside it fails an assert in the game.
-local ATTRIBUTES = {}
-for name in ("attr_power attr_firerate attr_stability attr_ammo_amount attr_duration attr_fuel attr_range attr_durability "
-	.. "attr_mobility attr_turnspeed attr_spec_backpack attr_spec_explosive attr_spec_anti_tank attr_spec_overheats attr_spec_melee "
-	.. "attr_spec_assistedreload attr_spec_armorpiercing attr_spec_unstoppable attr_spec_burst_fire attr_spec_ministun attr_spec_stun "
-	.. "attr_spec_sidearm attr_spec_toxic attr_spec_slowing attr_spec_incendiary attr_spec_chargeup attr_spec_homing attr_spec_lasersight "
-	.. "attr_spec_ignore_armor attr_spec_move_and_fire attr_spec_multi_target attr_spec_warning_siren attr_spec_reveal_objectives "
-	.. "attr_spec_show_samples attr_spec_remote_detonate attr_spec_arm_swivel"):gmatch("%S+") do ATTRIBUTES[name] = true end
+test("the_heir_prefers_free_pads_and_never_is_the_leaver", function()
+	local list = { { peer = "a", free = 0 }, { peer = "b", free = 3 }, { peer = "c", free = 1 } }
+	for seed = 1, 20 do eq(heir.pick("x", list, 2, seed), "b", "only b has room for two") end
+	local none = { { peer = "a", free = 0 }, { peer = "c", free = 1 } }
+	for seed = 1, 20 do yes(heir.pick("x", none, 2, seed), "with no room anywhere, all count") end
+	eq(heir.pick("x", {}, 1, 1), nil, "no candidates")
+	eq(heir.pick("x", { { peer = "x", free = 4 } }, 1, 1), nil, "the leaver is no heir")
+end)
 
-test("the_loadout_bars_use_only_attributes_the_game_has", function()
-	local def = tower.def()
-	for k in pairs(def.attributes) do yes(ATTRIBUTES[k], k) end
-	for i, u in ipairs(def.upgrades) do
-		for k in pairs(u.attributes or {}) do yes(ATTRIBUTES[k], "Mk" .. (i + 1) .. " " .. k) end
-		for k, v in pairs(u.upgrade_attributes or {}) do
-			yes(ATTRIBUTES[k], "Mk" .. (i + 1) .. " " .. k)
-			eq(type(v), "number", "an upgrade's bar is a number")
+test("a_claim_conflict_goes_to_the_lower_peer", function()
+	eq(heir.keeps({ "b", "a" }, "a"), true)
+	eq(heir.keeps({ "b", "a" }, "b"), false)
+	eq(heir.keeps({ "a" }, "a"), true)
+end)
+
+test("fit_keeps_to_the_pads_and_the_squad_cap", function()
+	eq(rules.fit(2, 4, 0, 8), 2)
+	eq(rules.fit(2, 1, 0, 8), 1, "one pad")
+	eq(rules.fit(2, 0, 0, 8), 0, "no pad")
+	eq(rules.fit(2, 4, 7, 8), 1, "one place left in the squad")
+	eq(rules.fit(1, 4, 8, 8), 0, "squad full")
+	eq(rules.fit(1, 4, 9, 8), 0, "never below 0")
+end)
+
+test("a_soldier_follows_the_owner_else_the_nearest_player", function()
+	local owner = { unit = "me" }
+	local humans = { { unit = "far", x = 30, y = 0 }, { unit = "near", x = 3, y = 0 } }
+	eq(rules.follow_target(owner, humans, { x = 0, y = 0 }), "me")
+	eq(rules.follow_target(nil, humans, { x = 0, y = 0 }), "near")
+	eq(rules.follow_target(nil, {}, { x = 0, y = 0 }), nil)
+end)
+
+test("what_a_soldier_picks_up", function()
+	local sample, ammo, gun = { kind = "research_sample_pickup" }, { kind = "ammo_pickup" }, { kind = "weapon_pickup" }
+	eq(rules.wants_pickup(sample, {}, 1), true, "samples always, a player near or not")
+	eq(rules.wants_pickup(ammo, { ammo_low = true }, 1), true)
+	eq(rules.wants_pickup(ammo, { ammo_low = false }, nil), false, "the game gives no box to full magazines")
+	eq(rules.wants_pickup(gun, { support_empty = true }, 10), true)
+	eq(rules.wants_pickup(gun, { support_empty = true }, 6), false, "a player within 6 metres")
+	eq(rules.wants_pickup(gun, { support_empty = true }, nil), true, "no player at all")
+	eq(rules.wants_pickup(gun, { support_empty = false }, 20), false, "a weapon in hand is never dropped for one")
+	eq(rules.wants_pickup({ kind = "objective_carry_object" }, {}, nil), false)
+	eq(rules.wants_pickup({ kind = "backpack_pickup" }, { support_empty = true }, nil), false)
+end)
+
+test("landing_spots_dont_overlap", function()
+	eq(#rules.offsets(0), 0)
+	local one = rules.offsets(1)
+	eq(one[1].x, 0) eq(one[1].y, 0)
+	for n = 2, 4 do
+		local spots = rules.offsets(n)
+		eq(#spots, n)
+		for i = 1, n do
+			for j = i + 1, n do
+				local dx, dy = spots[i].x - spots[j].x, spots[i].y - spots[j].y
+				yes(math.sqrt(dx * dx + dy * dy) >= 2.99, n .. " spots apart")
+			end
 		end
 	end
-end)
-
-test("the_entry_is_the_tesla_tower_under_a_name_of_its_own", function()
-	local def = tower.def()
-	eq(def.name, "remixed_repair_tower") eq(def.base, "stratagem_tesla_tower") eq(def.unit, nil, "lands the base's unit")
-	eq(def.icon, "stratagem_repairtool") eq(def.type, "defensive") eq(def.unlock.rank, 5)
-	eq(def.upgrades[1].cost, 2) eq(def.upgrades[2].cost, 3)
-	eq(def.stats, nil, "cooldown, uses, call-in and time on the ground stay the Tesla Tower's")
 end)
 
 return T

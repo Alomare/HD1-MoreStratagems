@@ -1,8 +1,7 @@
--- The Repair Tower's entry through Obsidian API's own define, when a copy of the API is at hand: the
--- OBSIDIAN_API folder, or ProjectObsidian/Bundled/ObsidianAPI beside the Mods folder. Without one, the
--- test is skipped.
-local tower = obsidian.module("src/repair_tower")
-local levels = obsidian.module("src/repair_levels")
+-- The SEAF Unit's entry, and the path through Obsidian API's own define when a copy of the API is at
+-- hand: the OBSIDIAN_API folder, or ProjectObsidian/Bundled/ObsidianAPI beside the Mods folder. Without
+-- one, that test is skipped.
+local seaf = obsidian.module("src/seaf_unit")
 
 local T = {}
 local function test(name, fn) T[#T + 1] = { name, fn } end
@@ -18,21 +17,7 @@ local function api_file()
 	return nil
 end
 
-local function clone(t)
-	if type(t) ~= "table" then return t end
-	local out = {}
-	for k, v in pairs(t) do out[k] = clone(v) end
-	return out
-end
-
-local function override(into, from)
-	for k, v in pairs(from) do
-		if type(v) == "table" and type(into[k]) == "table" then override(into[k], v) else into[k] = clone(v) end
-	end
-end
-
--- The game's Tesla Tower entry (lua/settings/loadout_settings.lua), and get_upgraded_stratagem as the
--- game applies levels.
+-- The game's Tesla Tower entry (lua/settings/loadout_settings.lua), the base the SEAF Unit copies.
 local function loadout()
 	local tesla = {
 		name = "stratagem_tesla_tower", activate_sound = "radio_defense_confirm", cooldown_time = 180, description = "stratagem_tesla_tower_d",
@@ -41,21 +26,65 @@ local function loadout()
 		combo = { "left", "down", "down", "up", "right", "left" }, stratagem_subtypes = { "turret", "defensive" }, patrol_alert_radius = 80,
 		attributes = { attr_durability = 3, attr_firerate = 2, attr_power = 4 },
 		upgrades = {
-			{ cost = 2, upgrade_description = "stratagem_tesla_tower_d_mk2", upgrade_name = "stratagem_tesla_tower_mk2", attributes = { attr_spec_multi_target = true } },
+			{ cost = 2, upgrade_description = "stratagem_tesla_tower_d_mk2", upgrade_name = "stratagem_tesla_tower_mk2" },
 			{ cost = 2, upgrade_description = "stratagem_tesla_tower_d_mk3", upgrade_name = "stratagem_tesla_tower_mk3" },
 		},
 	}
 	local s = { stratagems = { { name = "stratagem_resupply", id = 1, combo = { "down", "down", "up", "right" }, upgrades = {} }, tesla } }
 	tesla.id = 2
-	function s.get_upgraded_stratagem(id, n)
-		local e = s.stratagems[id]
-		if not n or n == 0 then return e end
-		local out = clone(e)
-		for i = 1, n do override(out, e.upgrades[i]) end
-		return out
-	end
 	return s
 end
+
+test("the_def_has_the_numbers_and_names", function()
+	local def = seaf.def()
+	eq(def.name, "stratagem_seaf_unit")
+	eq(def.base, "stratagem_tesla_tower", "copied from the Tesla Tower")
+	eq(def.title, "SEAF Unit")
+	eq(def.icon, "more_stratagems/seaf_unit_icon")
+	eq(def.icon_material, "more_stratagems/icons")
+	eq(def.stats.cooldown_time, 200, "cooldown")
+	eq(def.stats.activation_time, 15, "call-in")
+	eq(def.stats.num_uses, 2, "uses")
+	eq(type(def.on_activate), "function", "the activation hook")
+	eq(def.type, "supply", "a blue supply stratagem")
+	eq(def.unlock.rank, 5)
+	eq(#def.upgrades, 2, "a Mk2 and Mk3 of the SEAF Unit, not the Tesla Tower levels")
+	eq(def.upgrades[1].cost, 2) eq(def.upgrades[2].cost, 3)
+	eq(def.upgrades[1].title, "SEAF Unit Mk2")
+end)
+
+test("a_landed_beacon_calls_the_soldiers_and_never_drops_the_tower", function()
+	local got = nil
+	local def = seaf.def(function(pos, upgrade, owner) got = { pos = pos, upgrade = upgrade, owner = owner } end)
+	local vector = setmetatable({}, { __index = function(_, k) return ({ x = 1, y = 2, z = 3 })[k] end })
+	eq(def.on_activate({ name = seaf.NAME, position = vector, upgrade = 2, owner = "thrower" }), false, "no tower")
+	eq(got.pos.x, 1) eq(got.pos.z, 3) eq(rawequal(got.pos, vector), false, "plain numbers, not the vector")
+	eq(got.upgrade, 2) eq(got.owner, "thrower")
+	-- An error in the call still drops no tower.
+	local failing = seaf.def(function() error("broken") end)
+	local saved = obsidian.log
+	local logged = nil
+	obsidian.log = function(t) logged = t end
+	eq(failing.on_activate({ position = vector, upgrade = 0 }), false)
+	obsidian.log = saved
+	yes(logged and logged:find("broken", 1, true), "said in the log")
+	-- With an Obsidian API too old for soldiers, the use goes back.
+	local refused = nil
+	local old = seaf.def(nil, function(owner) refused = owner end)
+	eq(old.on_activate({ position = vector, upgrade = 0, owner = "thrower" }), false)
+	eq(refused, "thrower")
+	yes(seaf.at_least("1.41.0", seaf.BOTS_API), "1.41.0 brings soldiers")
+	eq(seaf.at_least("1.40.0", seaf.BOTS_API), false)
+end)
+
+test("the_api_version_gate", function()
+	yes(seaf.at_least("1.12.0", seaf.MIN_API), "1.12.0 is enough")
+	yes(seaf.at_least("1.22.3", seaf.MIN_API), "later patch")
+	yes(seaf.at_least("2.0.0", seaf.MIN_API), "later major")
+	eq(seaf.at_least("1.11.9", seaf.MIN_API), false, "older minor")
+	eq(seaf.at_least("1.9.0", seaf.MIN_API), false, "older by number, not text")
+	eq(seaf.at_least(nil, seaf.MIN_API), false, "no version")
+end)
 
 test("obsidian_api_takes_the_entry", function()
 	local path = api_file()
@@ -74,52 +103,26 @@ test("obsidian_api_takes_the_entry", function()
 	obsidian.hook = function() end
 	obsidian.log = function() end
 	-- The deploy has the mod's material, as obsidian.json puts it in the boot bundle.
-	obsidian.ui = { art = function(id, opts) return id == tower.ICON and opts.path == tower.ICON_MATERIAL end }
+	obsidian.ui = { art = function(id, opts) return id == seaf.ICON and opts.path == seaf.ICON_MATERIAL end }
 	local ok, err = pcall(function()
 		local custom = dofile(path)
-		local made, why = custom.define(tower.def("1.22.0"))
+		local made, why = custom.define(seaf.def())
 		yes(made, "defined: " .. tostring(why))
-		eq(made.name, levels.NAME)
+		eq(made.name, seaf.NAME)
 		local e = ls.stratagems[made.id]
-		eq(e.unit, "gameobjects/gameobject_hellpod_tesla_01", "lands the Tesla Tower")
-		eq(e.icon, tower.ICON, "its own icon") eq(table.concat(e.combo, " "), table.concat(tower.CODE, " "))
-		eq(#e.upgrades, 2, "Mk2 and Mk3") eq(e.upgrades[1].cost, 2) eq(e.upgrades[2].cost, 3)
-		eq(e.upgrades[1].upgrade_attributes.attr_range, 2)
-		eq(e.num_uses, 3, "the Tesla Tower's uses") eq(e.cooldown_time, 180, "and cooldown")
-		local mk3 = ls.get_upgraded_stratagem(made.id, 2)
-		eq(mk3.name, levels.NAME, "the name the hook looks for, at every level")
-		eq(mk3.unit, "gameobjects/gameobject_hellpod_tesla_01")
+		eq(e.cooldown_time, 200, "cooldown")
+		eq(e.activation_time, 15, "call-in")
+		eq(e.num_uses, 2, "uses")
+		eq(e.icon, seaf.ICON, "the mod's icon")
+		eq(e.unit, "gameobjects/gameobject_hellpod_tesla_01", "the base's unit, which on_activate never lets land")
+		eq(e.stratagem_type, "supply")
 		-- The same def twice is refused rather than added twice.
-		local again, taken = custom.define(tower.def("1.22.0"))
+		local again, taken = custom.define(seaf.def())
 		eq(again, nil) eq(taken, "taken")
 	end)
 	for k, v in pairs(saved) do obsidian[k] = v end
 	rawset(_G, "LoadoutSettings", saved_ls)
 	if not ok then error(err, 0) end
-end)
-
-test("the_own_icon_waits_for_an_api_that_adds_its_material", function()
-	eq(tower.own_icon("1.22.0"), true) eq(tower.own_icon("1.22.3"), true) eq(tower.own_icon("2.0.0"), true)
-	eq(tower.own_icon("1.21.9"), false) eq(tower.own_icon("1.9.0"), false) eq(tower.own_icon(nil), false, "no obsidian.info")
-	local old = tower.def("1.21.0")
-	eq(old.icon, tower.OLD_API_ICON) eq(old.icon_material, nil)
-	local new = tower.def("1.22.0")
-	eq(new.icon, tower.ICON) eq(new.icon_material, tower.ICON_MATERIAL)
-end)
-
--- The names tools/build_icon.py writes and obsidian.json lists.
-test("the_icon_names_match_the_build_and_the_manifest", function()
-	local f = assert(io.open("tools/build_icon.py", "r"))
-	local py = f:read("*a")
-	f:close()
-	eq(py:match('\nICON = "([^"]+)"'), tower.ICON)
-	eq(py:match('\nMATERIAL = "([^"]+)"'), tower.ICON_MATERIAL)
-	local texture = py:match('\nTEXTURE = "([^"]+)"')
-	f = assert(io.open("obsidian.json", "r"))
-	local manifest = f:read("*a")
-	f:close()
-	yes(manifest:find('"name": "' .. tower.ICON_MATERIAL .. '"', 1, true), "the material in the manifest")
-	yes(manifest:find('"name": "' .. texture .. '"', 1, true), "the texture in the manifest")
 end)
 
 return T

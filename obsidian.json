@@ -1,25 +1,27 @@
 {
   "obsidian": 1,
-  "id": "alomare.remixedstratagems",
+  "id": "alomare.morestratagems",
   "version": "1.1.0",
   "name": {
-    "en": "Remixed Stratagems"
+    "en": "More Stratagems"
   },
   "description": {
-    "en": "New stratagems built from units and effects already in the game. Adds the A/AC-90 Repair Tower, a Tesla Tower that heals Helldivers and repairs vehicles and turrets with REP-80 beams."
+    "en": "New stratagems for HELLDIVERS (2015). Adds the SEAF Unit, which calls down AI SEAF soldiers who fight beside the squad. Every player needs the mod."
   },
   "authors": [
     "Alomare"
   ],
   "scope": "session",
   "entry": "main.lua",
-  "source": "https://github.com/Alomare/HD1-RemixedStratagems",
+  "source": "https://github.com/Alomare/HD1-MoreStratagems",
   "modules": [
-    "src/repair_levels.lua",
-    "src/repair_targets.lua",
-    "src/repair_share.lua",
-    "src/repair_runtime.lua",
-    "src/repair_tower.lua"
+    "src/seaf_unit.lua",
+    "src/seaf_kit.lua",
+    "src/seaf_rules.lua",
+    "src/seaf_registry.lua",
+    "src/seaf_heir.lua",
+    "src/seaf_squad.lua",
+    "src/seaf_look.lua"
   ],
   "requires": [
     "obsidian.api"
@@ -27,16 +29,227 @@
   "resources": [
     {
       "type": "texture",
-      "name": "remixed_stratagems/repair_tower_icon",
+      "name": "more_stratagems/seaf_unit_icon",
       "bundle": "9cf71054ea26dddf",
-      "data": "res/repair_tower_icon.texture"
+      "data": "res/seaf_unit_icon.texture"
     },
     {
       "type": "material",
-      "name": "remixed_stratagems/icons",
+      "name": "more_stratagems/icons",
       "bundle": "9cf71054ea26dddf",
       "data": "res/icons.material"
+    },
+    {
+      "type": "unit",
+      "name": "more_stratagems/armor/seaf_helmet",
+      "bundle": "9cf71054ea26dddf",
+      "data": "res/armor/seaf_helmet.unit",
+      "when": {
+        "custom_armor": true
+      }
+    },
+    {
+      "type": "#18dead01056b72e9",
+      "name": "more_stratagems/armor/seaf_helmet",
+      "bundle": "9cf71054ea26dddf",
+      "data": "res/armor/seaf_helmet.bones",
+      "when": {
+        "custom_armor": true
+      }
+    },
+    {
+      "type": "texture",
+      "name": "more_stratagems/armor/seaf_helmet_diffuse",
+      "bundle": "9cf71054ea26dddf",
+      "data": "res/armor/seaf_helmet_diffuse.texture",
+      "when": {
+        "custom_armor": true
+      }
+    },
+    {
+      "type": "texture",
+      "name": "more_stratagems/armor/tex_dd3950fea65c11ca",
+      "bundle": "9cf71054ea26dddf",
+      "data": "res/armor/tex_dd3950fea65c11ca.texture",
+      "when": {
+        "custom_armor": true
+      }
+    },
+    {
+      "type": "material",
+      "name": "more_stratagems/armor/seaf_helmet",
+      "bundle": "9cf71054ea26dddf",
+      "data": "res/armor/seaf_helmet.material",
+      "when": {
+        "custom_armor": true
+      }
+    },
+    {
+      "type": "unit",
+      "name": "more_stratagems/armor/seaf_body_male",
+      "bundle": "9cf71054ea26dddf",
+      "data": "res/armor/seaf_body_male.unit",
+      "when": {
+        "custom_armor": true
+      }
+    },
+    {
+      "type": "#18dead01056b72e9",
+      "name": "more_stratagems/armor/seaf_body_male",
+      "bundle": "9cf71054ea26dddf",
+      "data": "res/armor/seaf_body_male.bones",
+      "when": {
+        "custom_armor": true
+      }
+    },
+    {
+      "type": "unit",
+      "name": "more_stratagems/armor/seaf_body_female",
+      "bundle": "9cf71054ea26dddf",
+      "data": "res/armor/seaf_body_female.unit",
+      "when": {
+        "custom_armor": true
+      }
+    },
+    {
+      "type": "#18dead01056b72e9",
+      "name": "more_stratagems/armor/seaf_body_female",
+      "bundle": "9cf71054ea26dddf",
+      "data": "res/armor/seaf_body_female.bones",
+      "when": {
+        "custom_armor": true
+      }
+    },
+    {
+      "type": "texture",
+      "name": "more_stratagems/armor/tex_9fab03b2ed652a40",
+      "bundle": "9cf71054ea26dddf",
+      "data": "res/armor/tex_9fab03b2ed652a40.texture",
+      "when": {
+        "custom_armor": true
+      }
+    },
+    {
+      "type": "texture",
+      "name": "more_stratagems/armor/tex_85a5eb770c6f72f5",
+      "bundle": "9cf71054ea26dddf",
+      "data": "res/armor/tex_85a5eb770c6f72f5.texture",
+      "when": {
+        "custom_armor": true
+      }
+    },
+    {
+      "type": "texture",
+      "name": "more_stratagems/armor/tex_4d8fcd183233801c",
+      "bundle": "9cf71054ea26dddf",
+      "data": "res/armor/tex_4d8fcd183233801c.texture",
+      "when": {
+        "custom_armor": true
+      }
+    },
+    {
+      "type": "texture",
+      "name": "more_stratagems/armor/seaf_body_diffuse",
+      "bundle": "9cf71054ea26dddf",
+      "data": "res/armor/seaf_body_diffuse.texture",
+      "when": {
+        "custom_armor": true
+      }
+    },
+    {
+      "type": "texture",
+      "name": "more_stratagems/armor/tex_c348b44a6820764a",
+      "bundle": "9cf71054ea26dddf",
+      "data": "res/armor/tex_c348b44a6820764a.texture",
+      "when": {
+        "custom_armor": true
+      }
+    },
+    {
+      "type": "texture",
+      "name": "more_stratagems/armor/seaf_body_head_diffuse",
+      "bundle": "9cf71054ea26dddf",
+      "data": "res/armor/seaf_body_head_diffuse.texture",
+      "when": {
+        "custom_armor": true
+      }
+    },
+    {
+      "type": "material",
+      "name": "more_stratagems/armor/seaf_body",
+      "bundle": "9cf71054ea26dddf",
+      "data": "res/armor/seaf_body.material",
+      "when": {
+        "custom_armor": true
+      }
+    },
+    {
+      "type": "unit",
+      "name": "more_stratagems/armor/seaf_cape",
+      "bundle": "9cf71054ea26dddf",
+      "data": "res/armor/seaf_cape.unit",
+      "when": {
+        "custom_armor": true
+      }
+    },
+    {
+      "type": "#18dead01056b72e9",
+      "name": "more_stratagems/armor/seaf_cape",
+      "bundle": "9cf71054ea26dddf",
+      "data": "res/armor/seaf_cape.bones",
+      "when": {
+        "custom_armor": true
+      }
+    },
+    {
+      "type": "texture",
+      "name": "more_stratagems/armor/seaf_cape_diffuse",
+      "bundle": "9cf71054ea26dddf",
+      "data": "res/armor/seaf_cape_diffuse.texture",
+      "when": {
+        "custom_armor": true
+      }
+    },
+    {
+      "type": "texture",
+      "name": "more_stratagems/armor/tex_cc5a854045fe5fa3",
+      "bundle": "9cf71054ea26dddf",
+      "data": "res/armor/tex_cc5a854045fe5fa3.texture",
+      "when": {
+        "custom_armor": true
+      }
+    },
+    {
+      "type": "texture",
+      "name": "more_stratagems/armor/tex_705204d6fe3ad35d",
+      "bundle": "9cf71054ea26dddf",
+      "data": "res/armor/tex_705204d6fe3ad35d.texture",
+      "when": {
+        "custom_armor": true
+      }
+    },
+    {
+      "type": "material",
+      "name": "more_stratagems/armor/seaf_cape",
+      "bundle": "9cf71054ea26dddf",
+      "data": "res/armor/seaf_cape.material",
+      "when": {
+        "custom_armor": true
+      }
     }
   ],
-  "loader_api": 1
+  "loader_api": 1,
+  "options": [
+    {
+      "id": "custom_armor",
+      "type": "toggle",
+      "default": true,
+      "label": {
+        "en": "SEAF custom armour"
+      },
+      "description": {
+        "en": "SEAF Units wear a white and blue armour set made for them. Changing this needs a full deploy in Obsidian. Off, they wear the Snow armour."
+      }
+    }
+  ]
 }
