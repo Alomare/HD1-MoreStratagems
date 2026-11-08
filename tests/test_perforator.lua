@@ -110,7 +110,7 @@ test("the_entry_has_the_railcannon_turret_numbers_and_new_words", function()
 	eq(def.upgrades[2].title, "A/MG-15 Perforator Turret Mk3")
 	eq(def.upgrades[1].stats, nil, "Mk2 keeps the cooldown")
 	eq(def.upgrades[2].stats.cooldown_time, 120, "Mk3 cooldown, as the Railcannon Turret Mk3")
-	eq(def.upgrades[1].upgrade_attributes.attr_firerate, 4)
+	eq(def.upgrades[1].upgrade_attributes.attr_firerate, 3)
 	eq(def.upgrades[2].upgrade_attributes.attr_turnspeed, 4)
 end)
 
@@ -174,15 +174,15 @@ test("the_variants_fire_justice_rounds_with_the_railcannon_levels", function()
 	local j = pt.justice_from(g.rifle.weapon_info)
 	local mk = {}
 	for l = 0, 2 do mk[l] = pt.variant(protect(g.rail), l, j) end
-	eq(mk[0].weapon_info.firerate, 460, "Justice 400, 15 percent faster")
-	eq(mk[1].weapon_info.firerate, 920, "Mk2 doubles")
-	eq(mk[2].weapon_info.firerate, 920, "Mk3 keeps Mk2")
+	eq(mk[0].weapon_info.firerate, 320, "Justice 400, 20 percent slower")
+	eq(mk[1].weapon_info.firerate, 480, "Mk2 half again as fast")
+	eq(mk[2].weapon_info.firerate, 480, "Mk3 keeps Mk2")
 	near(mk[0].turret_info.turn_speed_target, 0.23) near(mk[1].turret_info.turn_speed_target, 0.23)
 	near(mk[2].turret_info.turn_speed_target, 0.3, "Mk3 turns as the Railcannon Turret Mk3")
 	for l = 0, 2 do
 		local w, t = mk[l].weapon_info, mk[l].turret_info
 		eq(w.automatic, true) eq(w.power, 120) eq(w.power_crit, 150) eq(w.range, 30) eq(w.effect_hit, "projectile_heavy")
-		yes(w.spread < 2.5 and w.spread > 0, "a tighter spread than the Justice")
+		eq(w.spread, 0, "no spread at any level")
 		eq(w.attributes.armorpiercing, false) eq(w.attributes.unstoppable, false)
 		eq(t.rounds, 3000) near(t.fire_cooldown, 0.5) near(t.angle_to_target_diff_before_shooting, 0.07) eq(t.targeting_mode, "angle")
 		eq(t.infinite_ammo, true) eq(t.check_for_enemies_radius, 16) eq(t.start_invul_time, 4)
@@ -226,7 +226,7 @@ test("the_variants_go_in_beside_the_game_levels_and_come_out_again", function()
 	local held = {}
 	for l = 0, 2 do
 		held[l] = pt.raw(map[4 + l])
-		eq(held[l].weapon_info.firerate, l == 0 and 460 or 920)
+		eq(held[l].weapon_info.firerate, l == 0 and 320 or 480)
 	end
 	-- Again: the same tables.
 	eq(r:install(), true)
@@ -237,7 +237,7 @@ test("the_variants_go_in_beside_the_game_levels_and_come_out_again", function()
 	pt.assign(held[1], level(g.rail, 2))
 	eq(weapon.automatic, false)
 	r:frame(1)
-	eq(held[1].weapon_info, weapon, "the same table") eq(weapon.automatic, true) eq(weapon.firerate, 920)
+	eq(held[1].weapon_info, weapon, "the same table") eq(weapon.automatic, true) eq(weapon.firerate, 480)
 	-- A script reload empties the map: back with the same tables.
 	g.lsm.unit_path_to_modified_settings = {}
 	r:frame(1)
@@ -248,7 +248,7 @@ test("the_variants_go_in_beside_the_game_levels_and_come_out_again", function()
 	r:uninstall()
 	eq(map[4], nil) eq(map[5], nil) eq(map[6], nil)
 	eq(map[1], g.vanilla[1]) eq(map[2], g.vanilla[2])
-	eq(held[0].weapon_info.firerate, 460, "a turret standing keeps a working table")
+	eq(held[0].weapon_info.firerate, 320, "a turret standing keeps a working table")
 end)
 
 test("the_hellpod_of_a_perforator_hands_the_turret_its_level", function()
@@ -259,7 +259,7 @@ test("the_hellpod_of_a_perforator_hands_the_turret_its_level", function()
 	eq(s.upgrade_value, 6)
 	local turret = g.turret(s.upgrade_value)
 	local got = g.env.global("LoadoutSettings").get_upgraded_settings(turret)
-	eq(got.weapon_info.firerate, 920) near(got.turret_info.turn_speed_target, 0.3)
+	eq(got.weapon_info.firerate, 480) near(got.turret_info.turn_speed_target, 0.3)
 	local rail = { stratagem_info = { name = "stratagem_turret_railcannon" }, upgrade_value = 1 }
 	r:hellpod(rail)
 	eq(rail.upgrade_value, 1)
@@ -291,8 +291,8 @@ test("a_slave_that_sees_the_upgrade_value_late_remakes_the_raycast", function()
 	eq(ctx.state.weapon_info.power, 1500, "still the base while the value is 0")
 	turret.upgrade = 5
 	r:frame(0.1)
-	eq(ctx.state.weapon_info.firerate, 920) eq(ctx.state.raycast_slave.weapon_info.firerate, 920, "the raycast too")
-	near(ctx.state.round_delay, 60 / 920)
+	eq(ctx.state.weapon_info.firerate, 480) eq(ctx.state.raycast_slave.weapon_info.firerate, 480, "the raycast too")
+	near(ctx.state.round_delay, 60 / 480)
 	eq(ctx.state.start_rotation, 0.25, "rotation kept") eq(ctx.state.rotation[1], "landed")
 	local reloads = g.reloads
 	r:frame(0.1)
@@ -321,6 +321,7 @@ local function armoury(g)
 		set_unit_visibility = function(u, v) u.visible = v end,
 		set_local_position = function(u, _, p) u.offset = p end,
 		set_local_rotation = function() end,
+		set_local_scale = function(u, _, s) u.scale = s end,
 		flow_event = function(u, e) g.flows[#g.flows + 1] = { u, e } end,
 		set_flow_variable = function(u, n, v) u[n] = v end,
 	}
@@ -360,6 +361,7 @@ test("a_perforator_carries_a_justice_and_the_shot_plays_on_the_rifle", function(
 	eq(rifle.visible, true, "on show")
 	eq(g.node, pt.MOUNT_NODE) eq(g.links[1][1], rifle) eq(g.links[1][2], t, "on the turret")
 	eq(rifle.offset.z, pt.MOUNT.z)
+	eq(rifle.scale.x, 1.5, "half again the size") eq(rifle.scale.z, 1.5)
 	eq(ctx.state.raycast_slave.filter, "damage_ray") eq(ctx.state.raycast_slave.mode, "all")
 	eq(g.shooters[1].unit, t, "the turret stays the shooter, for the hits other machines hear of")
 	eq(g.shooters[1].owner, "thrower")
@@ -452,8 +454,8 @@ test("an_owner_taking_over_a_perforator_runs_it_on_the_perforator_settings", fun
 	eq(ctx.state.round_delay, 4)
 	turret.upgrade = 5
 	r:frame(0.1)
-	eq(ctx.state.weapon_info.firerate, 920) eq(ctx.state.turret_info.rounds, 3000)
-	near(ctx.state.round_delay, 60 / 920)
+	eq(ctx.state.weapon_info.firerate, 480) eq(ctx.state.turret_info.rounds, 3000)
+	near(ctx.state.round_delay, 60 / 480)
 	eq(r.masters[turret], nil, "done")
 	-- A turret that dies is dropped.
 	local gone = g.turret(4)
@@ -525,8 +527,8 @@ test("obsidian_api_takes_the_entry", function()
 		eq(e.icon, pt.ICON)
 		eq(e.upgrades[1].cost, 2) eq(e.upgrades[2].cost, 2)
 		eq(e.upgrades[1].cooldown_time, nil) eq(e.upgrades[2].cooldown_time, 120)
-		eq(e.upgrades[1].upgrade_attributes.attr_firerate, 4)
-		eq(e.attributes.attr_firerate, 3)
+		eq(e.upgrades[1].upgrade_attributes.attr_firerate, 3)
+		eq(e.attributes.attr_firerate, 2)
 	end)
 	for k, v in pairs(saved) do obsidian[k] = v end
 	rawset(_G, "LoadoutSettings", saved_ls)

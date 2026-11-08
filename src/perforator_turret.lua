@@ -26,15 +26,15 @@ M.ICON = "perforator_turret_icon"
 M.ICON_MATERIAL = "more_stratagems/icons"
 -- The Loadout bars, on the game's 1 to 4 scale: the Minigun Turret (75 power, 1300 a minute) shows 3 power
 -- and 4 fire rate, the Railcannon Turret 1 fire rate. upgrade_attributes are the new values, not steps.
-M.ATTRIBUTES = { attr_durability = 3, attr_firerate = 3, attr_power = 3, attr_stability = 4, attr_turnspeed = 2 }
+M.ATTRIBUTES = { attr_durability = 3, attr_firerate = 2, attr_power = 3, attr_stability = 4, attr_turnspeed = 2 }
 
-local BASE_TEXT = "Call in an automatic turret that fires a rapid stream of AR-20L 'Justice' rounds with a tighter spread than the rifle."
+local BASE_TEXT = "Call in an automatic turret that fires a steady stream of AR-20L 'Justice' rounds with pinpoint accuracy."
 	.. " The turret is capable of distinguishing friend from foe, but stay out of the line of fire. The rounds do not pierce heavy armor."
 M.DESCRIPTION = BASE_TEXT
--- The Railcannon Turret's levels and costs: Mk2 doubles the fire rate, Mk3 adds faster turning and a
+-- The Railcannon Turret's costs, and levels shaped like the Railcannon's: Mk2 adds half again the fire rate, Mk3 adds faster turning and a
 -- 120 second cooldown. The upgrade texts replace the base one in the menus, so each restates it.
 M.UPGRADES = {
-	{ title = M.TITLE .. " Mk2", cost = 2, upgrade_attributes = { attr_firerate = 4 },
+	{ title = M.TITLE .. " Mk2", cost = 2, upgrade_attributes = { attr_firerate = 3 },
 		description = BASE_TEXT .. " An improved feed mechanism allows for a higher rate of fire." },
 	{ title = M.TITLE .. " Mk3", cost = 2, stats = { cooldown_time = 120 }, upgrade_attributes = { attr_turnspeed = 4 },
 		description = BASE_TEXT .. " An improved feed mechanism allows for a higher rate of fire and upgraded motors allow for faster rotation towards targets." },
@@ -52,15 +52,15 @@ M.OFFSET = 4
 M.LEVELS = 3
 -- The Justice's own numbers (equipment/wep_assaultrifle_02.lua:7), used for any the game doesn't answer.
 M.JUSTICE = { firerate = 400, power = 120, power_crit = 150, range = 30, effect_hit = "projectile_heavy", armorpiercing = false }
--- 15 percent faster than the Justice at Mk1; Mk2 and Mk3 double that, as the Railcannon Turret Mk2 does.
-M.RATE_GAIN = 1.15
--- Degrees off the barrel for every round (turret_component.lua:464 passes no fraction flag, so
--- get_random_spread uses the full angle). The Justice opens from 0 to 15 degrees as it fires and holds
--- about 2.5 in sustained fire; 1.5 is well inside both.
-M.SPREAD = 1.5
+-- 20 percent slower than the Justice at Mk1, in exchange for rounds that all go straight; Mk2 and Mk3 fire
+-- half again as fast.
+M.RATE_GAIN = 0.8
+M.RATE_UPGRADE = 1.5
+-- Degrees off the barrel for every round: none, from the first level on.
+M.SPREAD = 0
 -- turret_info for a stream rather than a rail shot:
 --   rounds 3000: with infinite_ammo the count resets when it runs out, a jump each machine sees late. At
---     920 a minute the turret's 120 seconds use 1840, so no reset comes in a turret's life.
+--     480 a minute the turret's 120 seconds use 960, so no reset comes in a turret's life.
 --   fire_cooldown 0.5: keeps firing that long after the barrel drifts off the target, as the Minigun.
 --   angle_to_target_diff_before_shooting 0.07: as the Minigun; the Railcannon's 0.001 cuts the stream on
 --     every small correction.
@@ -72,6 +72,8 @@ M.TURRET = { rounds = 3000, fire_cooldown = 0.5, angle_to_target_diff_before_sho
 -- barrel, z up). Where it sits is a matter of looks: change these to move it.
 M.MOUNT_NODE = "j_rotate_side"
 M.MOUNT = { x = 0, y = 0.25, z = 0.3 }
+-- Times the rifle's own size.
+M.MOUNT_SCALE = 1.5
 -- What a shot says to the unit firing it (turret_component.lua, weapon_utility.lua): these go to the rifle.
 M.SHOT_EVENTS = { fire_start = true, fire_round = true, fire_end = true, on_raycast = true }
 M.SHOT_VARIABLES = { hit_position = true, hit = true, hit_normal = true }
@@ -160,7 +162,7 @@ M.same = same
 -- Rounds a minute at a level (0 is Mk1).
 function M.rate(justice_rate, level)
 	local mk1 = math.floor(justice_rate * M.RATE_GAIN + 0.5)
-	return level >= 1 and mk1 * 2 or mk1
+	return level >= 1 and math.floor(mk1 * M.RATE_UPGRADE + 0.5) or mk1
 end
 
 -- The weapon_info of a level from the Justice's numbers ({ firerate, power, power_crit, range,
@@ -380,6 +382,7 @@ function R:mount(component, unit, ctx, settings)
 		W.link_unit(world, rifle, 0, unit, node)
 		U.set_local_position(rifle, 0, G("Vector3")(M.MOUNT.x, M.MOUNT.y, M.MOUNT.z))
 		U.set_local_rotation(rifle, 0, G("Quaternion").identity())
+		U.set_local_scale(rifle, 0, G("Vector3")(M.MOUNT_SCALE, M.MOUNT_SCALE, M.MOUNT_SCALE))
 		self.rifles[unit] = { unit = rifle, world = world }
 	end
 	local st = ctx.state
