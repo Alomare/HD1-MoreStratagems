@@ -10,7 +10,9 @@ M.BASE = "stratagem_tesla_tower"
 M.TYPE = "supply"
 -- Offered from rank 5 on, as the game offers the other stratagems by rank.
 M.UNLOCK = { rank = 5 }
-M.ICON = "more_stratagems/seaf_unit_icon"
+-- The icon is the name of the sub-material inside the icon material (tools/build_icon.py writes it),
+-- not the texture's resource name. A gui asked for a sub-material the material lacks stops the game.
+M.ICON = "seaf_unit_icon"
 M.ICON_MATERIAL = "more_stratagems/icons"
 -- Seconds of cooldown, seconds from call-in to the stratagem landing, and uses per mission.
 M.COOLDOWN = 200

@@ -40,7 +40,7 @@ test("the_def_has_the_numbers_and_names", function()
 	eq(def.name, "stratagem_seaf_unit")
 	eq(def.base, "stratagem_tesla_tower", "copied from the Tesla Tower")
 	eq(def.title, "SEAF Unit")
-	eq(def.icon, "more_stratagems/seaf_unit_icon")
+	eq(def.icon, "seaf_unit_icon")
 	eq(def.icon_material, "more_stratagems/icons")
 	eq(def.stats.cooldown_time, 200, "cooldown")
 	eq(def.stats.activation_time, 15, "call-in")
@@ -123,6 +123,17 @@ test("obsidian_api_takes_the_entry", function()
 	for k, v in pairs(saved) do obsidian[k] = v end
 	rawset(_G, "LoadoutSettings", saved_ls)
 	if not ok then error(err, 0) end
+end)
+
+-- The icon and material names must be the ones tools/build_icon.py writes into res/icons.material:
+-- a gui asked for a sub-material the material lacks stops the game.
+test("icon names match the material the build script writes", function()
+	local f = assert(io.open("tools/build_icon.py", "r"))
+	local text = f:read("*a")
+	f:close()
+	local seaf = obsidian.module("src/seaf_unit")
+	eq(text:match('\nICON = "([^"]+)"'), seaf.ICON, "sub-material name")
+	eq(text:match('\nMATERIAL = "([^"]+)"'), seaf.ICON_MATERIAL, "material name")
 end)
 
 return T
