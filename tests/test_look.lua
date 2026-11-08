@@ -69,8 +69,11 @@ test("install_adds_three_entries_at_the_end_and_returns_their_indexes", function
 		eq(cs.body[23].name, "cus_body_seaf")
 		eq(cs.body[23].male.unit_path, "more_stratagems/armor/seaf_body_male")
 		eq(cs.body[23].female.unit_path, "more_stratagems/armor/seaf_body_female")
-		eq(cs.cape[42].name, "cus_cape_seaf")
-		eq(cs.cape[42].unit_path, "more_stratagems/armor/seaf_cape")
+		eq(cs.cape[42].name, "cus_cape_seaf_none")
+		eq(cs.cape[42].unit_path, nil, "an empty entry: the game spawns no cape unit for it")
+		local keys = 0
+		for _ in pairs(cs.cape[42]) do keys = keys + 1 end
+		eq(keys, 1, "the name and nothing else")
 		eq(#cs.helmet, 25) eq(#cs.body, 23) eq(#cs.cape, 42)
 		yes(got.helmet < 256 and got.body < 256 and got.cape < 256, "one byte on the wire")
 		-- The group's own fields stay.
@@ -141,13 +144,12 @@ test("uninstall_keeps_every_other_index_in_place", function()
 	end)
 end)
 
-test("fallback_is_the_snow_helmet_and_body_and_the_ceremonial_cape", function()
+test("fallback_is_the_snow_helmet_and_body_and_asks_for_no_cape", function()
 	with_game(nil, function(look, cs)
 		local f = look.fallback()
-		eq(f.helmet, 4) eq(f.body, 4) eq(f.cape, 12)
+		eq(f.helmet, 4) eq(f.body, 4) eq(f.cape, nil, "no vanilla cape is asked for")
 		eq(cs.helmet[f.helmet].name, "cus_helmet_tacticalsnow")
 		eq(cs.body[f.body].name, "cus_body_defaultsnow")
-		eq(cs.cape[f.cape].name, "cus_cape_ceremonial")
 		f.helmet = 99
 		eq(look.fallback().helmet, 4, "a fresh table each time")
 	end)
@@ -192,7 +194,7 @@ test("pick_gives_the_set_only_when_it_is_safe", function()
 		look.install()
 		eq(look.pick({}).helmet, 25, "alone")
 		eq(look.pick({ { peer = 1, obsidian = true, modset = "a" } }).body, 23, "with a player on one set")
-		eq(look.pick({ { peer = 1, obsidian = false } }).cape, 12, "with a vanilla player")
+		eq(look.pick({ { peer = 1, obsidian = false } }).cape, nil, "with a vanilla player: no cape index they would lack")
 	end)
 end)
 

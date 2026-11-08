@@ -1,11 +1,16 @@
--- The SEAF Unit's look: a blue set of armour (helmet, body, cape) that the game's customization
--- component can spawn like any other. The pieces are copies of the default Helldiver outfit under new unit
+-- The SEAF Unit's look: a blue set of armour (helmet and body) that the game's customization component can
+-- spawn like any other, and no cape. The pieces are copies of the default Helldiver outfit under new unit
 -- names (res/armor, built by tools/build_armor.py), so other players' armour is untouched.
 --
 -- The look is three indexes into CustomizationSettings.helmet, .body and .cape, which go over the network as
 -- one byte each. Every machine that runs this mod adds the same three entries at the end of the lists, so the
 -- indexes mean the same everywhere. A machine without them has no such entry, and the game errors reading
 -- the missing one: use pick(members), which answers the fallback unless every player in the lobby has them.
+--
+-- The cape entry is empty: a name and no unit_path, the shape the game gives "nothing worn" in the game's own lists
+-- (CustomizationSettings.heavy_armor[1] and all_terrain_boots[1] are {}). CustomizationComponent.update_unit_type
+-- destroys the cape unit it had and spawns none when the entry has no unit_path, on every machine that has
+-- the entry. A body that spawns wearing a cape (index 1 is the state's start value) loses it the same way.
 --
 -- Entries are never offered to the player. The armory menu drops every entry whose name no rank unlocks, no
 -- DLC owns and the save does not list as unlocked, and these names are none of those. The menu is also
@@ -15,18 +20,20 @@ local M = {}
 M.OPTION = "custom_armor"
 M.PREFIX = "more_stratagems/armor/"
 
--- Each entry copies the game's default piece, named by `base`, and changes the name and the unit path.
+-- Each entry copies the game's default piece, named by `base`, and changes the name and the unit path. An
+-- `empty` entry keeps the name alone.
 M.PIECES = {
 	helmet = { base = "cus_helmet_tactical", name = "cus_helmet_seaf", unit_path = M.PREFIX .. "seaf_helmet" },
 	body = { base = "cus_body_default", name = "cus_body_seaf",
 		male = M.PREFIX .. "seaf_body_male", female = M.PREFIX .. "seaf_body_female" },
-	cape = { base = "cus_cape_default", name = "cus_cape_seaf", unit_path = M.PREFIX .. "seaf_cape" },
+	cape = { base = "cus_cape_default", name = "cus_cape_seaf_none", empty = true },
 }
 -- The order the pieces are added and reported in.
 M.KINDS = { "helmet", "body", "cape" }
 
--- The snow helmet and body and the Ceremonial cape, which every game has.
-local FALLBACK = { helmet = 4, body = 4, cape = 12 }
+-- The snow helmet and body, which every game has. No cape: a vanilla game has no empty cape entry, and index 0
+-- (no cape in the network state) leaves a cape unit that already exists, so M.hide_cape hides it on this machine.
+local FALLBACK = { helmet = 4, body = 4 }
 
 local unpack = unpack or table.unpack
 
@@ -54,6 +61,7 @@ end
 
 -- The new entry for a piece, copied from the base entry of the game's list.
 local function made(piece, base)
+	if piece.empty then return { name = piece.name } end
 	local entry = clone(base)
 	entry.name = piece.name
 	if piece.unit_path then
@@ -156,9 +164,9 @@ function M.indexes()
 	return { helmet = have.helmet, body = have.body, cape = have.cape }
 end
 
--- The look every game has: the snow helmet and body, and the Ceremonial cape.
+-- The look every game has: the snow helmet and body, with the cape left as the body spawned.
 function M.fallback()
-	return { helmet = FALLBACK.helmet, body = FALLBACK.body, cape = FALLBACK.cape }
+	return { helmet = FALLBACK.helmet, body = FALLBACK.body }
 end
 
 -- Whether every other player in the lobby runs Obsidian with the same mod set as each other. members is

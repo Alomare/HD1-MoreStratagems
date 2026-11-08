@@ -102,6 +102,28 @@ test("the_boots_are_an_extra_perk_on_snow_only_and_only_when_usable", function()
 	eq(#kit.equip(nil, "body"), 0)
 end)
 
+test("a_cape_a_soldier_wears_is_hidden_once_and_never_throws", function()
+	local calls = 0
+	local body = {}
+	local api = { world = { cape_of = function(u) return u.cape end,
+		part_visible = function(u, part, on) calls = calls + 1 eq(part, "cape") eq(on, false) return true end } }
+	eq(kit.hide_cape(api, body), false, "no cape unit yet")
+	eq(calls, 0)
+	body.cape = {}
+	eq(kit.hide_cape(api, body), true, "hidden once the unit is there")
+	eq(kit.hide_cape(api, body), false, "and not hidden again every tick")
+	eq(calls, 1)
+	body.cape = {}
+	eq(kit.hide_cape(api, body), true, "a new cape unit is hidden too")
+	eq(kit.hide_cape(api, nil), false) eq(kit.hide_cape(nil, body), false) eq(kit.hide_cape({}, body), false)
+	local bad = { world = { cape_of = function() error("no state") end, part_visible = function() return true end } }
+	eq(kit.hide_cape(bad, body), false, "an error is swallowed")
+	local refused = { world = { cape_of = function(u) return u.cape end, part_visible = function() return false, "no_target" end } }
+	body.cape = {}
+	eq(kit.hide_cape(refused, body), false, "a refused hide is tried again")
+	eq(kit.hide_cape(refused, body), false)
+end)
+
 test("registry_round_trip", function()
 	local text = registry.encode({ seed = 77, free = 2, bots = { { id = 301, mk = 2, perk = "t", weapon = 14, hp = 80.4 }, { id = 302, mk = 1, hp = 100 } } })
 	eq(text, "1|77|2|301.2.t.14.80,302.1.-.0.100|")

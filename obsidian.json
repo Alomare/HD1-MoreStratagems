@@ -1,12 +1,12 @@
 {
   "obsidian": 1,
   "id": "alomare.morestratagems",
-  "version": "1.1.0",
+  "version": "1.0.0",
   "name": {
     "en": "More Stratagems"
   },
   "description": {
-    "en": "New stratagems for HELLDIVERS (2015): the SEAF Unit, AI soldiers who fight beside the squad; Homing Payload, a barrage of homing missiles onto the beacon; and the A/MG-15 Perforator Turret, a fast-firing turret. Every player needs the mod."
+    "en": "New stratagems for HELLDIVERS (2015): the SEAF Unit, AI soldiers who fight beside the squad; Homing Payload, a barrage of homing missiles onto the beacon; and the A/MG-15 Perforator Turret, a turret that fires a stream of Justice rounds with no spread. Every player needs the mod."
   },
   "authors": [
     "Alomare"
@@ -196,60 +196,6 @@
       "when": {
         "custom_armor": true
       }
-    },
-    {
-      "type": "unit",
-      "name": "more_stratagems/armor/seaf_cape",
-      "bundle": "9cf71054ea26dddf",
-      "data": "res/armor/seaf_cape.unit",
-      "when": {
-        "custom_armor": true
-      }
-    },
-    {
-      "type": "#18dead01056b72e9",
-      "name": "more_stratagems/armor/seaf_cape",
-      "bundle": "9cf71054ea26dddf",
-      "data": "res/armor/seaf_cape.bones",
-      "when": {
-        "custom_armor": true
-      }
-    },
-    {
-      "type": "texture",
-      "name": "more_stratagems/armor/seaf_cape_diffuse",
-      "bundle": "9cf71054ea26dddf",
-      "data": "res/armor/seaf_cape_diffuse.texture",
-      "when": {
-        "custom_armor": true
-      }
-    },
-    {
-      "type": "texture",
-      "name": "more_stratagems/armor/tex_cc5a854045fe5fa3",
-      "bundle": "9cf71054ea26dddf",
-      "data": "res/armor/tex_cc5a854045fe5fa3.texture",
-      "when": {
-        "custom_armor": true
-      }
-    },
-    {
-      "type": "texture",
-      "name": "more_stratagems/armor/tex_705204d6fe3ad35d",
-      "bundle": "9cf71054ea26dddf",
-      "data": "res/armor/tex_705204d6fe3ad35d.texture",
-      "when": {
-        "custom_armor": true
-      }
-    },
-    {
-      "type": "material",
-      "name": "more_stratagems/armor/seaf_cape",
-      "bundle": "9cf71054ea26dddf",
-      "data": "res/armor/seaf_cape.material",
-      "when": {
-        "custom_armor": true
-      }
     }
   ],
   "loader_api": 1,
@@ -262,7 +208,7 @@
         "en": "SEAF custom armour"
       },
       "description": {
-        "en": "SEAF Units wear a blue version of the default Helldiver armour, made for them. Changing this needs a full deploy in Obsidian. Off, they wear the Snow armour."
+        "en": "SEAF Units wear a slate-blue armour set made for them, with no cape. Changing this needs a full deploy in Obsidian. Off, they wear the Snow armour and keep the cape on other players' screens."
       }
     }
   ]

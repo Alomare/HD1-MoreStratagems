@@ -123,6 +123,15 @@ function F.machine(net, peer, opts)
 					{ name = "stratagem_repairtool", unit_path = "equipment/wep_repairtool_01" } }
 			end,
 		},
+		-- api.world: the cape unit of a body (set by a test as body.cape) and the local hide of a part.
+		world = {
+			cape_of = function(u) return u.cape end,
+			part_visible = function(u, part, on)
+				if part ~= "cape" or on ~= false or not u.cape then return false, "no_target" end
+				u.cape_hidden = (u.cape_hidden or 0) + 1
+				return true
+			end,
+		},
 		-- api.gear.add_perk: the perks added on top of a body's main one are listed on the body. Refuses a perk
 		-- the player cannot use, as the real one does ("not_available").
 		gear = {

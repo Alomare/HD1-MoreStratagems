@@ -83,11 +83,31 @@ function M.extras(snow, usable)
 	return out
 end
 
--- Gives a soldier's body the extra perks (api.gear.add_perk, which runs the perk's setup on the body). Reads the
--- biome and the player's ownership defensively: whatever fails leaves the soldier without them. Answers the
--- perk names added.
+-- Soldiers wear no cape. The look module gives the soldier an empty cape entry, which the game answers by
+-- destroying the cape unit and spawning none (seaf_look). Where that entry is not there (a lobby with a player
+-- who lacks the mod set, so the look is the vanilla one) the cape the body spawned with stays on every other
+-- machine; this hides it on this one, mesh by mesh (api.world.part_visible). The cape unit is made after the
+-- body, so the squad asks again each tick until it has been hidden. Answers true once it hides one.
+local hidden = setmetatable({}, { __mode = "k" })
+function M.hide_cape(api, unit)
+	local ok, done = pcall(function()
+		local world = type(api) == "table" and api.world
+		if not (unit and world and world.cape_of and world.part_visible) then return false end
+		local cape = world.cape_of(unit)
+		if not cape or hidden[cape] then return false end
+		if world.part_visible(unit, "cape", false) ~= true then return false end
+		hidden[cape] = true
+		return true
+	end)
+	return ok and done == true
+end
+
+-- Gives a soldier's body the extra perks (api.gear.add_perk, which runs the perk's setup on the body) and hides a
+-- cape it still wears. Reads the biome and the player's ownership defensively: whatever fails leaves the soldier
+-- without them. Answers the perk names added.
 function M.equip(api, unit)
 	local added = {}
+	M.hide_cape(api, unit)
 	pcall(function()
 		if not (type(api) == "table" and unit and api.gear and api.gear.add_perk) then return end
 		local snow = api.game and api.game.state and M.snow(api.game.state())

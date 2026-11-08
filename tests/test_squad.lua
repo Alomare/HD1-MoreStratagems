@@ -38,7 +38,7 @@ test("a_mk3_call_brings_two_soldiers_with_a_mk2_kit_and_their_orders", function(
 		eq(bot.orders.ride_along[1], true) eq(bot.orders.auto_revive[1], 15)
 		eq(bot.orders.avoid_shots[2].melee, true, "close attacks too")
 		eq(bot.orders.auto_pickup[1].radius, 12)
-		eq(bot.look.helmet, 4) eq(bot.look.body, 4) eq(bot.look.cape, 12) eq(bot.look.gender, 1)
+		eq(bot.look.helmet, 4) eq(bot.look.body, 4) eq(bot.look.cape, nil, "no cape asked for in the vanilla look") eq(bot.look.gender, 1)
 		eq(bot.look.color.x, 2, "the blue outline")
 	end
 	local dx = a.body.pos.x - b.body.pos.x
@@ -317,6 +317,71 @@ test("a_soldier_the_heir_spawns_on_snow_gets_the_boots_too", function()
 	F.run(net, squads, 8)
 	eq(#b.bots, 1, "the soldier came back")
 	eq(b.bots[1].body.extra_perks[1], "perk_all_terrain_boots")
+end)
+
+test("ammunition_comes_back_slowly_up_to_the_start_and_slower_on_the_support_weapon", function()
+	local rules = obsidian.module("src/seaf_rules")
+	local timer, add = rules.ammo_step("primary_weapon", 0, 14, 3, 6)
+	eq(add, 0) timer, add = rules.ammo_step("primary_weapon", timer, 2, 3, 6)
+	eq(add, 1, "a magazine back after the time") eq(timer, 1, "the rest carried over")
+	eq(select(2, rules.ammo_step("primary_weapon", 99, 1, 6, 6)), 0, "not above the start")
+	eq(select(2, rules.ammo_step("support_weapon", 0, rules.PRIMARY_MAG_EVERY + 1, 0, 2)), 0, "the support weapon is slower")
+	eq(select(2, rules.ammo_step("support_weapon", 0, rules.SUPPORT_MAG_EVERY, 0, 2)), 1)
+	local net = F.net()
+	local m = F.machine(net, "a")
+	local s = squad_on(m)
+	s:call_in({ x = 0, y = 0, z = 0 }, 0, m.avatar)
+	F.run(net, { a = s }, 0.25)
+	local bot = m.bots[1]
+	local state = { num_mags = 2, rounds = 30 }
+	m.api.game.masters = function() return { rifle = { state = state } } end
+	bot.weapons = function() return { { unit = "rifle", component = "firearm", slot = "primary_weapon", info = { magazines = 6 } } } end
+	local added = {}
+	bot.add_ammo = function(_, slot, mags) added[#added + 1] = { slot, mags } return true end
+	F.run(net, { a = s }, rules.PRIMARY_MAG_EVERY + 1)
+	eq(#added >= 1, true, "a magazine came back")
+	eq(added[1][1], "primary_weapon") eq(added[1][2], 1)
+end)
+
+test("a_cape_that_shows_up_after_the_body_is_hidden_on_the_next_tick_and_only_once", function()
+	local net = F.net()
+	local m = F.machine(net, "a")
+	local s = squad_on(m)
+	s:call_in({ x = 10, y = 10, z = 1 }, 2, m.avatar)
+	local body = m.bots[1].body
+	yes(not body.cape_hidden, "no cape unit yet, nothing to hide")
+	body.cape = { unit = true }
+	F.run(net, { a = s }, 1)
+	eq(body.cape_hidden, 1, "hidden on the machine that owns the soldier")
+	F.run(net, { a = s }, 2)
+	eq(body.cape_hidden, 1, "not every tick")
+end)
+
+test("the_look_of_a_soldier_names_the_empty_cape_when_the_set_is_installed", function()
+	local net = F.net()
+	local m = F.machine(net, "a")
+	local look = { pick = function() return { helmet = 25, body = 23, cape = 42 } end }
+	local s = squad_on(m, { look = look })
+	s:call_in({ x = 10, y = 10, z = 1 }, 0, m.avatar)
+	eq(m.bots[1].look.cape, 42, "the empty cape entry of the set")
+end)
+
+test("a_soldier_the_heir_spawns_has_no_cape_either", function()
+	local net = F.net()
+	local a = F.machine(net, "a")
+	local b = F.machine(net, "b")
+	local look = { pick = function() return { helmet = 25, body = 23, cape = 42 } end }
+	local squads = { a = squad_on(a, { look = look }), b = squad_on(b, { look = look }) }
+	squads.a:call_in({ x = 30, y = 5, z = 0 }, 1, a.avatar)
+	F.run(net, squads, 2)
+	F.leave(net, "a")
+	squads.a = nil
+	F.run(net, squads, 8)
+	eq(#b.bots, 1, "the soldier came back")
+	eq(b.bots[1].look.cape, 42, "with the empty cape entry")
+	b.bots[1].body.cape = {}
+	F.run(net, squads, 1)
+	eq(b.bots[1].body.cape_hidden, 1, "and a cape that still showed up is hidden")
 end)
 
 return T

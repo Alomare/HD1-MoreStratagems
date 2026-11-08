@@ -1,5 +1,6 @@
-"""Builds the SEAF Unit's armour set from the installed game: the default Helldiver helmet, body and cape,
-recoloured (yellow to blue, black to a very dark blue), as resources of their own.
+"""Builds the SEAF Unit's armour set from the installed game: the default Helldiver helmet and body,
+recoloured as the SEAF soldier of internal/seaf_reference.png, as resources of their own. The cape is not
+built: SEAF soldiers wear none (src/seaf_look.lua adds an empty cape entry).
 
 Usage: python tools/build_armor.py [path to Helldivers/contents]
 
@@ -55,10 +56,7 @@ PIECES = [
     {"key": "body", "material": "seaf_body",
      "units": {"seaf_body_male": CHARS + "helldiver_default_male_01",
                "seaf_body_female": CHARS + "helldiver_default_female_01"},
-     "atlases": {0x1caeba1e7d785bc0: ("body_diffuse", "body"), 0x1d99cca6c104bbc8: ("body_head_diffuse", "body")}},
-    {"key": "cape", "material": "seaf_cape",
-     "units": {"seaf_cape": CHARS + "helldiver_default_cape_01"},
-     "atlases": {0xb869c7c0d0346ca9: ("cape_diffuse", "cape")}},
+     "atlases": {0x1caeba1e7d785bc0: ("body_diffuse", "body"), 0x1d99cca6c104bbc8: ("body_head_diffuse", "shoulder")}},
 ]
 
 
@@ -94,38 +92,96 @@ def smooth(x, a, b):
     return t * t * (3 - 2 * t)
 
 
-# The scheme: the default Helldiver with the yellow turned blue and the black turned a very dark blue. Every
-# other colour (white, grey, skin, metal, decals) and all shading stay as the game has them.
-YELLOW_OUT_HUE = 218.0        # where the middle of the yellow band lands
-YELLOW_CENTRE = 45.0          # the middle of the game's yellow
-YELLOW_SPREAD = 0.45          # how much of the yellow's own hue spread is kept, so shaded gold stays a little different
-DARK_HUE, DARK_SAT = 222.0, 0.85
-DARK_LIFT = 0.09              # added to the value, so the darkest pixel is blue rather than black
-# Value below which a pixel counts as black (full blend) and above which it is untouched, per look. The cape
-# is cloth all over, between 0.09 and 0.2, with a light emblem above 0.4.
-DARK_RANGE = {"helmet": (0.12, 0.22), "body": (0.12, 0.22), "cape": (0.30, 0.40)}
+# The scheme: the default Helldiver painted as the SEAF soldier of the reference image (HELLDIVERS 2 SEAF): a matte
+# slate-blue helmet with a black visor and lower face, blue chest and shoulder plates darker than the helmet,
+# pale grey sleeves, taupe gloves, tan pouches, black everything else. The game's textures are atlases, so each
+# region is told apart by colour (yellow trim, neutral grey plates, near black) and, where the colours alone
+# cannot say (grey plates and grey cloth look alike), by the region of the atlas it sits in (RECTS). Shading,
+# wear and the emblem stay: every region maps the game's value to a new one and keeps the pixel's own detail.
+PLATE_HUE = 224.0            # slate blue, about (88, 104, 150) at the middle of the helmet
+PLATE_SAT = 0.42
+# Plate value out for the game's value in, per atlas: the game's plates are grey with baked shading, so the curve
+# lifts the middle to the reference's blue and holds the highlights below white.
+CURVES = {
+    "helmet": [(0.0, 0.0), (0.17, 0.30), (0.286, 0.50), (0.45, 0.62), (0.7, 0.74), (1.0, 0.86)],
+    "shoulder": [(0.0, 0.0), (0.18, 0.30), (0.267, 0.48), (0.365, 0.58), (0.7, 0.75), (1.0, 0.86)],
+    "body": [(0.0, 0.0), (0.17, 0.22), (0.26, 0.37), (0.42, 0.50), (0.7, 0.62), (1.0, 0.75)],
+}
+ACCENT = {"helmet": 0.66, "shoulder": 0.66, "body": 0.52}   # value of the trim, which was yellow: a lighter blue
+BLACK_HUE, BLACK_SAT = 20.0, 0.4                          # the reference's black is warm: (35, 26, 22)
+
+# Atlas regions (x0, y0, x1, y1 in a 256 pixel atlas, as fractions of the size) of the body atlas that are
+# cloth, not plates. Read from the atlas and the vertices of the male body unit.
+RECTS = {
+    "sleeve": (0.67, 0.0, 1.0, 0.615),     # arms: dark grey and brown cloth
+    "glove": (0.66, 0.615, 1.0, 1.0),      # hands, with the fingers in the lower right
+    "pouch": (0.0, 0.74, 0.51, 1.0),       # two large flapped pockets
+}
+# What each cloth region becomes: hue, saturation, then value = gain * game's value + lift, capped.
+CLOTH = {
+    "sleeve": (40.0, 0.06, 3.5, 0.40, 0.85),   # off-white: (172, 174, 174) lit to (99, 95, 87) in shade
+    "glove": (28.0, 0.31, 2.0, 0.22, 0.46),    # dark taupe (100, 83, 69)
+    "pouch": (32.0, 0.23, 2.2, 0.22, 0.50),    # khaki (106, 93, 82)
+}
 
 
-def masks(rgb, look):
-    """(yellow weight, black weight, hue, saturation, value), the weights 0..1 per pixel."""
-    h, s, v = to_hsv(rgb)
-    # Yellow: hue 28..66 (fading out to 20 and 80), saturated. Skin sits below hue 20 and is left alone.
-    hue_ok = smooth(h, 20, 28) * (1 - smooth(h, 66, 80))
-    yellow = hue_ok * smooth(s, 0.2, 0.45) * smooth(v, 0.05, 0.14)
-    lo, hi = DARK_RANGE[look]
-    dark = (1 - smooth(v, lo, hi)) * (1 - yellow)
-    return yellow, dark, h, s, v
+def region(shape, name):
+    """A 0/1 array for a rectangle of RECTS."""
+    h, w = shape
+    x0, y0, x1, y1 = RECTS[name]
+    out = np.zeros(shape, np.float32)
+    out[int(y0 * h):int(y1 * h), int(x0 * w):int(x1 * w)] = 1
+    return out
+
+
+def plate_colour(v, look):
+    xs, ys = zip(*CURVES[look])
+    pv = np.interp(v, xs, ys)
+    sat = PLATE_SAT * (1 - 0.3 * smooth(pv, 0.65, 0.9))
+    return from_hsv(np.full_like(v, PLATE_HUE), sat, pv)
 
 
 def recolour_armour(rgb, look):
-    """rgb 0..1. Yellow goes blue with saturation and value kept; black and near-black go very dark blue
-    with the value kept (and lifted a little); everything else is returned as it came."""
-    yellow, dark, h, s, v = masks(rgb, look)
-    blue_h = YELLOW_OUT_HUE + (h - YELLOW_CENTRE) * YELLOW_SPREAD
-    blue = from_hsv(blue_h, np.clip(s, 0, 0.95), np.clip(v ** 0.85, 0, 1))
-    navy = from_hsv(np.full_like(v, DARK_HUE), np.full_like(v, DARK_SAT), np.clip(v * 0.9 + DARK_LIFT, 0, 1))
-    out = rgb * (1 - yellow[..., None]) + blue * yellow[..., None]
-    out = out * (1 - dark[..., None]) + navy * dark[..., None]
+    """rgb 0..1. look: helmet, shoulder (the body's small atlas) or body."""
+    h, s, v = to_hsv(rgb)
+    shape = v.shape
+    # Yellow trim: hue 20..80, saturated; it becomes a lighter blue of the same shading.
+    hue_ok = smooth(h, 20, 28) * (1 - smooth(h, 66, 80))
+    yellow = hue_ok * smooth(s, 0.2, 0.45) * smooth(v, 0.05, 0.14)
+    # Skin: warm, mid saturation, bright. Left alone.
+    warm = np.where(h > 180, 360 - h, h)
+    skin = (1 - smooth(warm, 24, 38)) * smooth(s, 0.12, 0.2) * (1 - smooth(s, 0.55, 0.7)) * smooth(v, 0.27, 0.35)
+    # Neutral grey that is lit: a plate (or, in a cloth region, cloth).
+    grey = (1 - smooth(s, 0.18, 0.3)) * smooth(v, 0.17, 0.25)
+    out = rgb.copy()
+    cloth_total = np.zeros(shape, np.float32)
+    if look == "body":
+        for name, (ch, cs, cg, cl, cap) in CLOTH.items():
+            w = region(shape, name) * (1 - skin)
+            keep = smooth(v, 0.004, 0.014)                     # seams and black stitching stay black
+            cv = np.clip(cl + cg * v, 0, cap)
+            col = from_hsv(np.full_like(v, ch), np.full_like(v, cs), cv)
+            w = w * keep
+            out = out * (1 - w[..., None]) + col * w[..., None]
+            cloth_total = np.maximum(cloth_total, region(shape, name))
+    plate_w = grey * (1 - skin) * (1 - cloth_total)
+    out = out * (1 - plate_w[..., None]) + plate_colour(v, look) * plate_w[..., None]
+    # Trim: a lighter blue, shading kept; in a cloth region the trim takes that region's colour instead.
+    acc_v = ACCENT[look] * (0.7 + 0.3 * np.clip(v / 0.85, 0, 1))
+    accent = from_hsv(np.full_like(v, PLATE_HUE), np.full_like(v, 0.34), np.clip(acc_v, 0, 1))
+    if look == "body":
+        for name, (ch, cs, cg, cl, cap) in CLOTH.items():
+            if name == "pouch":
+                pv = np.clip(cl + cg * v, 0, cap)
+                cloth_acc = from_hsv(np.full_like(v, ch), np.full_like(v, cs), pv)
+                w = region(shape, name)[..., None]
+                accent = accent * (1 - w) + cloth_acc * w
+    out = out * (1 - yellow[..., None]) + accent * yellow[..., None]
+    if look == "helmet":
+        # Visor and lower face: near black, a warm black.
+        dark = (1 - smooth(v, 0.13, 0.21)) * (1 - yellow) * (1 - skin)
+        black = from_hsv(np.full_like(v, BLACK_HUE), np.full_like(v, BLACK_SAT), np.clip(0.03 + 0.55 * v, 0, 1))
+        out = out * (1 - dark[..., None]) + black * dark[..., None]
     return np.clip(out, 0, 1)
 
 
@@ -390,19 +446,22 @@ def check(src, files, manifest):
 
 
 def preview(pairs):
-    cell = 384
+    """The reference soldier on the left; on the right each atlas before (left) and after (right)."""
+    cell, ref_size = 330, 3 * 330 + 20
     names = list(pairs)
-    sheet = Image.new("RGB", (cell * 2 + 30, len(names) * (cell + 10) + 10), (36, 36, 40))
+    sheet = Image.new("RGB", (ref_size + cell * 2 + 40, max(ref_size, len(names) * (cell + 10)) + 10), (36, 36, 40))
+    reference = INTERNAL / "seaf_reference.png"
+    if reference.exists():
+        sheet.paste(Image.open(reference).convert("RGB").resize((ref_size, ref_size), Image.Resampling.LANCZOS), (10, 10))
     y = 10
     for stem in names:
         for i, data in enumerate(pairs[stem]):
             img = Image.fromarray(decode(data), "RGBA")
             w, h = img.size
-            # Alpha over a checker, so a cape's edge shows.
             back = Image.new("RGBA", img.size, (90, 90, 96, 255))
             back.alpha_composite(img)
             back = back.convert("RGB").resize((cell, cell), Image.Resampling.NEAREST if w < cell else Image.Resampling.LANCZOS)
-            sheet.paste(back, (10 + i * (cell + 10), y))
+            sheet.paste(back, (ref_size + 20 + i * (cell + 10), y))
         y += cell + 10
     sheet.save(INTERNAL / "seaf_armor_preview.png")
 
@@ -418,7 +477,7 @@ def write(files, manifest):
     option = {
         "id": OPTION, "type": "toggle", "default": True,
         "label": {"en": "SEAF custom armour"},
-        "description": {"en": "SEAF Units wear a blue version of the default Helldiver armour, made for them. Changing this needs a full deploy in Obsidian. Off, they wear the Snow armour."},
+        "description": {"en": "SEAF Units wear a slate-blue armour set made for them, with no cape. Changing this needs a full deploy in Obsidian. Off, they wear the Snow armour and keep the cape on other players' screens."},
     }
     INTERNAL.mkdir(exist_ok=True)
     (INTERNAL / "armor_manifest.json").write_text(

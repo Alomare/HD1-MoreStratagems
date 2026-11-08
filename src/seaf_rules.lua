@@ -52,6 +52,22 @@ function M.wants_pickup(item, state, player_near)
 	return false
 end
 
+-- Seconds to bring back one magazine, while a soldier holds fewer than the kit started with: steady on the rifle and
+-- the pistol, slower on the support weapon so the threat rules still matter.
+M.PRIMARY_MAG_EVERY = 15
+M.SIDEARM_MAG_EVERY = 25
+M.SUPPORT_MAG_EVERY = 60
+
+-- The recovery of one weapon. slot: the game's slot name; timer: seconds so far; dt: seconds since last; held and
+-- start: what the weapon has of the thing recovered and started with. Answers the new timer and how many to add.
+function M.ammo_step(slot, timer, dt, held, start)
+	local every = slot == "support_weapon" and M.SUPPORT_MAG_EVERY or slot == "sidearm_weapon" and M.SIDEARM_MAG_EVERY or M.PRIMARY_MAG_EVERY
+	if not (held and start) or held >= start then return 0, 0 end
+	timer = (timer or 0) + (tonumber(dt) or 0)
+	if timer < every then return timer, 0 end
+	return timer - every, 1
+end
+
 -- Where n soldiers land around the beacon, as offsets { x, y } 3 metres apart, so their hellpods don't
 -- come down on one spot.
 function M.offsets(n)

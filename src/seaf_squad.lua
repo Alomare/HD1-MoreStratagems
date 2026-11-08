@@ -24,7 +24,7 @@ M.FOLLOW = 6            -- metres a soldier keeps to the one it follows
 M.FIGHT = 25            -- metres a soldier fights in
 M.REVIVE = 15           -- metres a soldier goes to help someone up
 M.PICKUP = 12           -- metres a soldier goes for something lying about
-M.FALLBACK_LOOK = { helmet = 4, body = 4, cape = 12 }
+M.FALLBACK_LOOK = { helmet = 4, body = 4 }
 M.PICKUP_KINDS = { "research_sample_pickup", "ammo_pickup", "weapon_pickup" }
 
 local S = {}
@@ -251,6 +251,34 @@ function S:kit_state(bot)
 	return { ammo_low = low, support_empty = not support }
 end
 
+-- Ammunition comes back by itself while a soldier holds less than the kit started with (rules.ammo_step). A weapon
+-- with magazines gets those back; one with none to spare, as a single-shot launcher, gets the round back; a laser
+-- the radiators. Through the API's add_ammo, on this machine, which owns the soldier.
+function S:recover_ammo(rec, dt)
+	if not (rec.ready and not rec.dead and rec.bot.add_ammo) or dt <= 0 then return end
+	rec.ammo = rec.ammo or {}
+	for _, w in ipairs(rec.bot:weapons() or {}) do
+		local master = self.api.game.masters(w.component)[w.unit]
+		local state = master and master.state
+		if state then
+			local mags, rounds = tonumber(state.num_mags), tonumber(state.rounds)
+			local a = rec.ammo[w.unit]
+			if not a then
+				a = { timer = 0, start_mags = math.max(mags or 0, type(w.info) == "table" and tonumber(w.info.magazines) or 0), start_rounds = rounds or 0 }
+				rec.ammo[w.unit] = a
+			end
+			local add
+			if a.start_mags > 0 then
+				a.timer, add = rules.ammo_step(w.slot, a.timer, dt, mags, a.start_mags)
+				if add > 0 then rec.bot:add_ammo(w.slot, add) end
+			elseif rounds and type(state.heat) ~= "number" then
+				a.timer, add = rules.ammo_step(w.slot, a.timer, dt, rounds, a.start_rounds)
+				if add > 0 then rec.bot:add_ammo(w.slot, nil, add) end
+			end
+		end
+	end
+end
+
 function S:wants(item, bot)
 	local near = nil
 	local at = item.position
@@ -438,6 +466,8 @@ function S:tick(dt)
 			table.remove(self.bots, i)
 		else
 			self:prepare(rec)
+			kit.hide_cape(self.api, rec.bot:unit())
+			self:recover_ammo(rec, tonumber(dt) or 0)
 		end
 	end
 	self.wait = self.wait - (tonumber(dt) or 0)
