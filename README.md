@@ -48,4 +48,4 @@ The Railcannon Turret with an AR-20L Justice mounted on top, firing a continuous
 
 Every player in the lobby needs More Stratagems, at the same version and with the same option. In a lobby where someone lacks the mod, each new stratagem plays as the game stratagem it is built on.
 
-Needs Obsidian API 1.46.0 or later.
+Needs Obsidian API 1.48.0 or later.

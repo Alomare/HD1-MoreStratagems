@@ -57,6 +57,7 @@ function F.machine(net, peer, opts)
 
 	local function free() return math.max(0, m.pads - #m.bots) end
 
+	m.pickups, m.removed = {}, {}
 	m.api = {
 		game = {
 			in_mission = function() return m.in_mission end,
@@ -125,6 +126,22 @@ function F.machine(net, peer, opts)
 		},
 		-- api.world: the cape unit of a body (set by a test as body.cape) and the local hide of a part.
 		world = {
+			pickups = function(pos, radius, kinds)
+				local out = {}
+				for _, p in ipairs(m.pickups) do
+					local fits = true
+					if pos then
+						local dx, dy = p.position.x - pos.x, p.position.y - pos.y
+						fits = dx * dx + dy * dy <= radius * radius
+					end
+					if fits then out[#out + 1] = p end
+				end
+				return out
+			end,
+			remove_pickup = function(u)
+				m.removed[#m.removed + 1] = u
+				return true
+			end,
 			cape_of = function(u) return u.cape end,
 			part_visible = function(u, part, on)
 				if part ~= "cape" or on ~= false or not u.cape then return false, "no_target" end

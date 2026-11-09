@@ -384,4 +384,29 @@ test("a_soldier_the_heir_spawns_has_no_cape_either", function()
 	eq(b.bots[1].body.cape_hidden, 1, "and a cape that still showed up is hidden")
 end)
 
+test("a_dead_soldiers_support_weapon_is_removed_but_not_ones_already_lying_about", function()
+	local net = F.net()
+	local m = F.machine(net, "a")
+	local s = squad_on(m)
+	s:call_in({ x = 10, y = 0, z = 0 }, 1, m.avatar)
+	local bot = m.bots[1]
+	local here = bot:position()
+	local old = { unit = {}, position = { x = here.x + 1, y = here.y, z = 0 }, owned = true }
+	m.pickups[1] = old
+	F.run(net, { a = s }, 0.3)
+	bot.body.dead = true
+	F.run(net, { a = s }, 0.1)
+	local dropped = { unit = {}, position = { x = here.x, y = here.y + 1, z = 0 }, owned = true }
+	m.pickups[#m.pickups + 1] = dropped
+	F.run(net, { a = s }, 0.3)
+	eq(#m.removed, 1, "only the corpse's weapon")
+	eq(m.removed[1], dropped.unit)
+	-- Past the watch, a weapon lying there is no longer the corpse's.
+	F.run(net, { a = s }, 3)
+	local late = { unit = {}, position = { x = here.x, y = here.y, z = 0 }, owned = true }
+	m.pickups[#m.pickups + 1] = late
+	F.run(net, { a = s }, 0.5)
+	eq(#m.removed, 1)
+end)
+
 return T

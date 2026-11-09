@@ -26,6 +26,8 @@ M.REVIVE = 15           -- metres a soldier goes to help someone up
 M.PICKUP = 12           -- metres a soldier goes for something lying about
 M.FALLBACK_LOOK = { helmet = 4, body = 4 }
 M.PICKUP_KINDS = { "research_sample_pickup", "ammo_pickup", "weapon_pickup" }
+M.CORPSE_WATCH = 2      -- seconds a dead soldier's body is watched for the weapon it drops
+M.CORPSE_REACH = 4      -- metres from the body a dropped weapon can come to rest in
 
 local S = {}
 S.__index = S
@@ -83,7 +85,8 @@ function M.new(api, env)
 	local base = default_env(api)
 	for k, v in pairs(env or {}) do base[k] = v end
 	local s = setmetatable({ api = api, env = base, bots = {}, peers = {}, positions = {}, pending = {}, present = {},
-		wait = 0, clock = 0, counter = 0, mission = nil, seed = nil, claim = nil, claim_until = nil, inherited = {} }, S)
+		wait = 0, clock = 0, counter = 0, mission = nil, seed = nil, claim = nil, claim_until = nil, inherited = {},
+		corpses = {}, seen_pickups = {} }, S)
 	if api.lobby and api.lobby.on_leave then
 		api.lobby.on_leave(function(peer) s:on_leave(peer) end)
 	end
@@ -102,6 +105,7 @@ function S:sync_mission()
 		self.seed = type(st) == "table" and st.mission_seed or nil
 		self.bots, self.peers, self.positions, self.pending, self.inherited = {}, {}, {}, {}, {}
 		self.claim, self.claim_until, self.counter = nil, nil, 0
+		self.corpses, self.seen_pickups = {}, {}
 	end
 end
 
@@ -295,12 +299,43 @@ function S:wants(item, bot)
 	return rules.wants_pickup(item, self:kit_state(bot), near)
 end
 
--- A soldier died: forgotten, and the corpse sinks away after a few seconds.
+-- A soldier died: forgotten, and the corpse sinks away after a few seconds. The game drops the support weapon
+-- (CharacterStateDead), a moment after this call; this machine owns the soldier and so what falls, and
+-- takes it away for every machine (the new pickups near the body in the next ticks) before anyone can use it.
 function S:died(rec)
 	if rec.dead then return end
 	rec.dead = true
+	local pos = rec.bot:position()
 	self:forget(rec)
 	rec.bot:remove({ decay = M.DECAY })
+	if pos and self.api.world and self.api.world.pickups then
+		self.corpses[#self.corpses + 1] = { x = pos.x, y = pos.y, z = pos.z, til = self.clock + M.CORPSE_WATCH, before = self.seen_pickups }
+	end
+end
+
+-- What this machine sees lying about now, to tell a corpse's weapon from those that were there before.
+function S:note_pickups()
+	local world = self.api.world
+	if not (world and world.pickups) then return end
+	local seen = {}
+	for _, p in ipairs(world.pickups(nil, nil, { "weapon_pickup" }) or {}) do seen[p.unit] = true end
+	self.seen_pickups = seen
+end
+
+function S:clear_corpses()
+	local world = self.api.world
+	if #self.corpses == 0 or not (world and world.pickups and world.remove_pickup) then return end
+	for i = #self.corpses, 1, -1 do
+		local c = self.corpses[i]
+		for _, p in ipairs(world.pickups(c, M.CORPSE_REACH, { "weapon_pickup" }) or {}) do
+			if p.owned and not c.before[p.unit] then
+				c.before[p.unit] = true
+				local ok, why = world.remove_pickup(p.unit)
+				if not ok then self:log("SEAF soldier's weapon not removed: " .. tostring(why)) end
+			end
+		end
+		if self.clock >= c.til then table.remove(self.corpses, i) end
+	end
 end
 
 function S:forget(rec)
@@ -459,6 +494,8 @@ function S:tick(dt)
 	end
 	self:sync_mission()
 	self.clock = self.clock + (tonumber(dt) or 0)
+	self:clear_corpses()
+	self:note_pickups()
 	for i = #self.bots, 1, -1 do
 		local rec = self.bots[i]
 		-- The API drops a bot by itself: aboard the shuttle, or at the mission's end.
