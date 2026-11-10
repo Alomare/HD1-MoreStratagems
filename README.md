@@ -1,6 +1,6 @@
 # More Stratagems
 
-Three new stratagems for HELLDIVERS (2015), for [Obsidian Mod Manager](https://github.com/Alomare/ObsidianModManager).
+Four new stratagems for HELLDIVERS (2015), for [Obsidian Mod Manager](https://github.com/Alomare/ObsidianModManager).
 
 ## SEAF Unit
 
@@ -39,6 +39,16 @@ The Railcannon Turret with an AR-20L Justice mounted on top, firing a continuous
 | Mk1 | 320 | 180 s | |
 | Mk2 | 480 | 180 s | |
 | Mk3 | 480 | 120 s | Turns faster |
+
+## AD-342 'Hot Dog'
+
+The AD-334 'Guard Dog' drone and backpack, armed with the flamer of the FLAM-24 'Pyro' sidearm instead of the submachine gun. The flames burn enemies, leave patches of fire on the ground and hurt Helldivers too. The drone refuels in the backpack after 50 rounds, as the Pyro holds. Unlocks with the Guard Dog, so it needs the Defender pack.
+
+- Code: ↓ ↑ ← ↑ → →
+- Call-in 3 seconds, one use, as the Guard Dog.
+- Mk1: the flamer, aimed at enemies within 8 metres, the reach of the flame.
+- Mk2: the drone moves while it fires.
+- Mk3: the flames also pierce armour and stun for a moment, as the Guard Dog Mk3 rounds do.
 
 ## Option
 

@@ -124,6 +124,19 @@ end
 local perforator = obsidian.module("src/perforator_turret")
 local perforator_ready = api_info ~= nil and perforator.at_least(api_info.version, perforator.MIN_API)
 
+-- One hook on the hellpod for every stratagem that marks what it drops: each one's hellpod(setup) runs
+-- before the original, on the thrower's machine.
+local hellpods = {}
+obsidian.hook("HellpodComponent", "setup_master", function(original, component, unit, ctx, setup, ...)
+	for _, watcher in ipairs(hellpods) do watcher:hellpod(setup) end
+	return original(component, unit, ctx, setup, ...)
+end)
+
+local function in_mission()
+	local ok, yes = pcall(api.game.in_mission)
+	return ok and yes == true
+end
+
 local function define_perforator()
 	local made, why = api.stratagems.define(perforator.def())
 	if why == "not_ready" then return false end
@@ -141,10 +154,7 @@ if perforator_ready then
 		unit_path = function(unit) return Unit().get_data(unit, "unit_path") end,
 		alive = function(unit) return Unit().alive(unit) end,
 	})
-	obsidian.hook("HellpodComponent", "setup_master", function(original, component, unit, ctx, setup, ...)
-		turrets:hellpod(setup)
-		return original(component, unit, ctx, setup, ...)
-	end)
+	hellpods[#hellpods + 1] = turrets
 	obsidian.hook("TurretComponent", "setup_master", function(original, component, unit, ctx, ...)
 		original(component, unit, ctx, ...)
 		turrets:watch(component, unit, ctx, false)
@@ -175,6 +185,56 @@ if perforator_ready then
 	end)
 else
 	obsidian.log("Perforator Turret not added: needs Obsidian API " .. table.concat(perforator.MIN_API, ".") .. " or later")
+end
+
+-- The AD-342 'Hot Dog': settings variants of the Guard Dog's drone on every machine, the thrower's hellpod
+-- handing the drone an upgrade value that picks them, and the FLAM-24's flamer in place of the drone's
+-- bullets (src/hot_dog).
+local hot_dog = obsidian.module("src/hot_dog")
+local hot_dog_ready = api_info ~= nil and hot_dog.at_least(api_info.version, hot_dog.MIN_API)
+
+local function define_hot_dog()
+	local made, why = api.stratagems.define(hot_dog.def())
+	if why == "not_ready" then return false end
+	if not made and why ~= "taken" then obsidian.log("Hot Dog not added: " .. tostring(why)) end
+	return true
+end
+
+if hot_dog_ready then
+	if not define_hot_dog() then obsidian.on_frame(define_hot_dog) end
+	local dogs = hot_dog.runtime({
+		global = function(name) return rawget(_G, name) end,
+		log = obsidian.log,
+		original = api.edits and api.edits.original,
+		unit_path = function(unit) return rawget(_G, "Unit").get_data(unit, "unit_path") end,
+		alive = function(unit) return rawget(_G, "Unit").alive(unit) end,
+	})
+	hellpods[#hellpods + 1] = dogs
+	obsidian.hook("FirearmComponent", "update_slaves", function(original, component, entities, dt, ...)
+		return dogs:slaves(original, component, entities, dt, ...)
+	end)
+	obsidian.hook("FirearmComponent", "update_masters", function(original, component, entities, dt, ...)
+		original(component, entities, dt, ...)
+		-- Guarded: an error here would have the loader run the original a second time.
+		local ok, err = pcall(dogs.masters, dogs, component, entities, dt)
+		if not ok then obsidian.log("Hot Dog: " .. tostring(err)) end
+	end)
+	obsidian.hook("FirearmComponent", "remove_slave", function(original, component, unit, ...)
+		pcall(dogs.forget, dogs, unit)
+		return original(component, unit, ...)
+	end)
+	obsidian.on_frame(function()
+		local ok, err = pcall(dogs.frame, dogs, rawget(_G, "ENGINE_DT") or 0.016, in_mission())
+		if not ok then obsidian.log("Hot Dog: " .. tostring(err)) end
+	end)
+	obsidian.on_session(function(on)
+		if not on then
+			local ok, err = pcall(dogs.uninstall, dogs, in_mission())
+			if not ok then obsidian.log("Hot Dog: " .. tostring(err)) end
+		end
+	end)
+else
+	obsidian.log("Hot Dog not added: needs Obsidian API " .. table.concat(hot_dog.MIN_API, ".") .. " or later")
 end
 
 obsidian.log("More Stratagems ready")

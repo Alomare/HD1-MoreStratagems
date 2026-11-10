@@ -6,7 +6,7 @@
     "en": "More Stratagems"
   },
   "description": {
-    "en": "New stratagems for HELLDIVERS (2015): the SEAF Unit, AI soldiers who fight beside the squad; Homing Payload, a barrage of homing missiles onto the beacon; and the A/MG-15 Perforator Turret, a turret that fires a stream of Justice rounds with no spread. Every player needs the mod."
+    "en": "New stratagems for HELLDIVERS (2015): the SEAF Unit, AI soldiers who fight beside the squad; Homing Payload, a barrage of homing missiles onto the beacon; the A/MG-15 Perforator Turret, a turret that fires a stream of Justice rounds with no spread; and the AD-342 'Hot Dog', a Guard Dog drone that fires the flames of the FLAM-24 'Pyro' sidearm. Every player needs the mod."
   },
   "authors": [
     "Alomare"
@@ -23,7 +23,8 @@
     "src/seaf_squad.lua",
     "src/seaf_look.lua",
     "src/homing_payload.lua",
-    "src/perforator_turret.lua"
+    "src/perforator_turret.lua",
+    "src/hot_dog.lua"
   ],
   "requires": [
     "obsidian.api"
@@ -46,6 +47,12 @@
       "name": "more_stratagems/homing_payload_icon",
       "bundle": "9cf71054ea26dddf",
       "data": "res/homing_payload_icon.texture"
+    },
+    {
+      "type": "texture",
+      "name": "more_stratagems/hot_dog_icon",
+      "bundle": "9cf71054ea26dddf",
+      "data": "res/hot_dog_icon.texture"
     },
     {
       "type": "material",

@@ -4,6 +4,7 @@ New, changed or removed features, one line each, brief and direct. The section f
 
 ## 1.1.0
 
+- New: AD-342 'Hot Dog', a Guard Dog drone that fires the flames of the FLAM-24 'Pyro' sidearm, with the Guard Dog's Mk2 and Mk3 levels.
 - Changed: a dead SEAF Unit soldier's support weapon is deleted at once instead of staying on the ground.
 - Changed: SEAF Unit needs Obsidian API 1.48.0.
 

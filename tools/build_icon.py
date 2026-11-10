@@ -1,12 +1,12 @@
-"""Builds the More Stratagems icons: the SEAF Unit's icon, recoloured from the installed game, and two icons
-from ready-made PNGs. All three share one material, res/icons.material.
+"""Builds the More Stratagems icons: the SEAF Unit's icon, recoloured from the installed game, and three icons
+from ready-made PNGs in internal/strat_icons. All four share one material, res/icons.material.
 
 Usage: python tools/build_icon.py [path to Helldivers/contents]
 
-Writes res/icons.material (three sub-materials, SEAF first), res/seaf_unit_icon.texture,
-res/homing_payload_icon.texture and res/perforator_turret_icon.texture, all for the boot bundle (see
-"resources" in obsidian.json). Also writes internal/icons_preview.png to look at, and
-internal/icons_manifest.json with the two new texture resource entries for obsidian.json. Needs Pillow.
+Writes res/icons.material (four sub-materials, SEAF first), res/seaf_unit_icon.texture,
+res/homing_payload_icon.texture, res/perforator_turret_icon.texture and res/hot_dog_icon.texture, all for the
+boot bundle (see "resources" in obsidian.json). Also writes internal/icons_preview.png to look at, and
+internal/icons_manifest.json with the new texture resource entries for obsidian.json. Needs Pillow.
 
 The icons are drawn like the game's own: 80x80 uncompressed textures with the mips and header of the Reinforce
 icon, and material records copied from the Reinforce's in hud/hud, so the Loadout screen's clip variables and
@@ -43,14 +43,15 @@ REFERENCE = "stratagem_resupply"
 
 # The icons drawn from PNGs, after the SEAF's in the material: (icon name, texture name, PNG).
 PNG_ICONS = [
-    ("homing_payload_icon", "more_stratagems/homing_payload_icon", Path(r"C:\Users\vps26\Downloads\homingpayload.png")),
-    ("perforator_turret_icon", "more_stratagems/perforator_turret_icon", Path(r"C:\Users\vps26\Downloads\penetratorturret.png")),
+    ("homing_payload_icon", "more_stratagems/homing_payload_icon", INTERNAL / "strat_icons" / "homing_payload.png"),
+    ("perforator_turret_icon", "more_stratagems/perforator_turret_icon", INTERNAL / "strat_icons" / "perforator_turret.png"),
+    ("hot_dog_icon", "more_stratagems/hot_dog_icon", INTERNAL / "strat_icons" / "hot_dog.png"),
 ]
 
 # Vanilla icons, by their texture's name hash, both on a coloured background box like the stratagem tiles: a
 # red-brown offensive one (stratagem_missile_strike, hud/hud record 075a50e5) and an olive green one (hud/hud
 # record 7b8ab5ca, stratagem name not known here). Each one's edge ring, a single colour, is the edge the
-# PNG icons of the same colour family take.
+# PNG icons of the same colour family take. Blue tiles take the edge of the Resupply's icon (REFERENCE).
 VANILLA_RED = 0xcde05b6f3c278e3e
 VANILLA_GREEN = 0x8eb0c6e73be4bc22
 
@@ -183,9 +184,11 @@ def recolour(icon, reference):
 
 
 def colour_family(colour):
-    """red or green, by the hue of a stratagem tile's background colour."""
+    """red, green or blue, by the hue of a stratagem tile's background colour."""
     hue = colorsys.rgb_to_hsv(*(c / 255 for c in colour[:3]))[0] * 360
-    return "red" if hue < 40 or hue > 340 else "green"
+    if hue < 40 or hue > 340:
+        return "red"
+    return "blue" if 160 <= hue <= 260 else "green"
 
 
 def vanilla_edge(data):
@@ -267,13 +270,13 @@ def check_material(data, entries):
 
 
 def preview(tiles, scale=3, gap=16, split=32):
-    """The icons side by side, with a wider gap before the vanilla ones (the last two)."""
+    """The icons side by side, with a wider gap before the vanilla ones (the last three)."""
     w, h = ICON_SIZE[0] * scale, ICON_SIZE[1] * scale
     width = len(tiles) * w + (len(tiles) - 1) * gap + (split - gap)
     sheet = Image.new("RGBA", (width, h), (30, 30, 30, 255))
     x = 0
     for i, tile in enumerate(tiles):
-        if i == len(tiles) - 2:
+        if i == len(tiles) - 3:
             x += split - gap
         sheet.paste(tile.resize((w, h), Image.Resampling.NEAREST), (x, 0))
         x += w + gap
@@ -294,7 +297,8 @@ def main():
     tiles = [seaf]
     entries = [(ICON, TEXTURE)]
     new = []
-    edges = {"red": vanilla_edge(textures[VANILLA_RED]), "green": vanilla_edge(textures[VANILLA_GREEN])}
+    edges = {"red": vanilla_edge(textures[VANILLA_RED]), "green": vanilla_edge(textures[VANILLA_GREEN]),
+             "blue": vanilla_edge(tex[REFERENCE])}
     for icon, texture_name, path in PNG_ICONS:
         image = load_png(path, edges)
         (RES / f"{icon}.texture").write_bytes(texture(tex[SOURCE], image))
@@ -306,9 +310,10 @@ def main():
     check_material(data, entries)
     (RES / "icons.material").write_bytes(data)
 
-    # Vanilla red (offensive) and green (defensive) icons, for comparing colours.
+    # Vanilla red (offensive), green (defensive) and blue (supply) icons, for comparing colours.
     tiles.append(Image.open(io.BytesIO(textures[VANILLA_RED])).convert("RGBA"))
     tiles.append(Image.open(io.BytesIO(textures[VANILLA_GREEN])).convert("RGBA"))
+    tiles.append(reference)
     preview(tiles).save(INTERNAL / "icons_preview.png")
     (INTERNAL / "icons_manifest.json").write_text(json.dumps(new, indent=2) + "\n", encoding="utf-8")
     print("wrote", RES / "icons.material", ", ".join(f"res/{i}.texture" for i, _ in entries))
