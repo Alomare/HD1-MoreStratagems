@@ -393,6 +393,17 @@ test("only_hot_dog_drones_leave_the_bullet_routine", function()
 	yes(seen == entities, "the game's table as given")
 end)
 
+test("every_hot_dog_of_a_squad_leaves_the_bullet_routine_on_the_first_frame", function()
+	local g = game()
+	local r = hd.runtime(g.env)
+	yes(r:install())
+	local entities = {}
+	for i = 1, 4 do entities[g.unit(hd.DRONE, 5, { owned = i == 1 })] = { state = { firing_auto = false } } end
+	local seen
+	r:slaves(function(component, list) seen = list end, g.component, entities, 0.1)
+	yes(next(seen) == nil, "no Hot Dog goes to the bullet routine")
+end)
+
 test("a_firing_hot_dog_casts_a_growing_flame_with_the_pistol_sound", function()
 	local g = game()
 	local r = hd.runtime(g.env)

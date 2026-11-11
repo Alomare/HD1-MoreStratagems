@@ -2,6 +2,10 @@
 
 New, changed or removed features, one line each, brief and direct. The section for a release becomes the release notes.
 
+## Next
+
+- Changed: with several AD-342 'Hot Dog' drones in a squad, every drone fires flames from the first frame. Before, a second drone could fire bullets.
+
 ## 1.1.0
 
 - New: AD-342 'Hot Dog', a Guard Dog drone that fires the flames of the FLAM-24 'Pyro' sidearm, with the Guard Dog's Mk2 and Mk3 levels.

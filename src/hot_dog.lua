@@ -452,7 +452,9 @@ function R:slaves(original, component, entities, dt, ...)
 	end
 	local rest, mine = {}, {}
 	for unit, ctx in pairs(entities) do
-		if self.hot[unit] then mine[unit] = ctx else rest[unit] = ctx end
+		-- Asked here and not read from the cache: `any` stops at the first Hot Dog, so a second one
+		-- (another player's) may not have been asked yet, and would fire bullets.
+		if self:level_of(unit) then mine[unit] = ctx else rest[unit] = ctx end
 	end
 	original(component, rest, dt, ...)
 	for unit, ctx in pairs(mine) do
