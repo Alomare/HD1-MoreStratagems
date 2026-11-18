@@ -236,7 +236,7 @@ test("the_icon_is_one_the_build_script_writes", function()
 end)
 
 local function api_file()
-	for _, dir in ipairs({ os.getenv("OBSIDIAN_API") or "", "../../ProjectObsidian/Bundled/ObsidianAPI" }) do
+	for _, dir in ipairs({ os.getenv("OBSIDIAN_API") or "", "../../../ProjectObsidian/Bundled/ObsidianAPI" }) do
 		if dir ~= "" then
 			local path = dir .. "/lib/custom.lua"
 			local f = io.open(path, "r")
